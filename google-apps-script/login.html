@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DecodeXMarket - Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --terminal-bg: #0a0a0a;
+      --terminal-card: #141416;
+      --terminal-accent: #f27d26;
+      --terminal-border: #222222;
+    }
+    body {
+      background-color: var(--terminal-bg);
+      font-family: 'Inter', sans-serif;
+      color: #ffffff;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .glass-card {
+      background: rgba(20, 20, 22, 0.8);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--terminal-border);
+      border-radius: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    .accent-glow {
+      box-shadow: 0 0 30px rgba(242, 125, 38, 0.15);
+    }
+    .input-field {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--terminal-border);
+      transition: all 0.3s ease;
+    }
+    .input-field:focus {
+      border-color: var(--terminal-accent);
+      box-shadow: 0 0 0 2px rgba(242, 125, 38, 0.2);
+    }
+    .btn-primary {
+      background: var(--terminal-accent);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px -5px rgba(242, 125, 38, 0.4);
+    }
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+    .loader {
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-top: 2px solid #ffffff;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="absolute inset-0 pointer-events-none">
+    <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-orange-500/10 blur-[120px] rounded-full"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-orange-500/10 blur-[120px] rounded-full"></div>
+  </div>
+
+  <div class="w-full max-w-md px-6 z-10">
+    <div class="glass-card p-10 accent-glow">
+      <div class="text-center mb-10">
+        <h1 class="text-3xl font-black tracking-tighter uppercase mb-2">
+          DECODE<span class="text-[#f27d26]">X</span>MARKET
+        </h1>
+        <p class="text-[10px] font-mono text-gray-500 uppercase tracking-[0.4em]">Institutional Terminal Login</p>
+      </div>
+
+      <form id="loginForm" class="space-y-6">
+        <div class="space-y-2">
+          <label class="text-[10px] font-mono text-gray-400 uppercase tracking-widest ml-1">Email / UserID</label>
+          <input 
+            type="text" 
+            id="email" 
+            required 
+            placeholder="Enter your email..."
+            class="w-full input-field rounded-xl px-4 py-4 text-sm font-medium outline-none text-white placeholder:text-gray-600"
+          >
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-[10px] font-mono text-gray-400 uppercase tracking-widest ml-1">Password</label>
+          <input 
+            type="password" 
+            id="password" 
+            required 
+            placeholder="••••••••"
+            class="w-full input-field rounded-xl px-4 py-4 text-sm font-medium outline-none text-white placeholder:text-gray-600"
+          >
+        </div>
+
+        <div id="errorMessage" class="text-red-500 text-[11px] font-mono uppercase text-center hidden"></div>
+
+        <button 
+          type="submit" 
+          id="submitBtn"
+          class="w-full btn-primary text-black font-black py-4 rounded-xl text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3"
+        >
+          <span id="btnText">Authenticate</span>
+          <div id="btnLoader" class="loader"></div>
+        </button>
+      </form>
+
+      <div class="mt-8 text-center">
+        <p class="text-[10px] font-mono text-gray-600 uppercase tracking-widest">
+          Secured by DecodeX Encryption
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const btnLoader = document.getElementById('btnLoader');
+    const errorMessage = document.getElementById('errorMessage');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      // UI Loading State
+      submitBtn.disabled = true;
+      btnText.textContent = "Verifying...";
+      btnLoader.style.display = "block";
+      errorMessage.classList.add('hidden');
+
+      // Call Apps Script Function
+      google.script.run
+        .withSuccessHandler((response) => {
+          if (response.success) {
+            btnText.textContent = "Success!";
+            submitBtn.classList.replace('bg-[#f27d26]', 'bg-green-500');
+            
+            // Redirect or Handle Success
+            setTimeout(() => {
+              alert(response.message);
+              // window.location.href = "YOUR_DASHBOARD_URL";
+            }, 500);
+          } else {
+            showError(response.message);
+          }
+        })
+        .withFailureHandler((err) => {
+          showError("Connection Failed: " + err.message);
+        })
+        .checkLogin(email, password);
+    });
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorMessage.classList.remove('hidden');
+      submitBtn.disabled = false;
+      btnText.textContent = "Authenticate";
+      btnLoader.style.display = "none";
+    }
+  </script>
+</body>
+</html>

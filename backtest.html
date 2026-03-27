@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DecodeXMarket - Backtest Research Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'terminal-bg': '#0B0E11',
+                        'terminal-card': '#141416',
+                        'terminal-border': '#232326',
+                        'terminal-accent': '#3B82F6',
+                        'terminal-green': '#10B981',
+                        'terminal-red': '#EF4444',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0B0E11; }
+        .glow-green { box-shadow: 0 0 20px rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4); }
+        .glow-red { box-shadow: 0 0 20px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+    </style>
+</head>
+<body class="text-gray-300 font-sans min-h-screen flex flex-col items-center p-4 md:p-8">
+
+    <div class="w-full max-w-6xl space-y-8">
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-4xl md:text-6xl font-black text-white tracking-tighter uppercase mb-2">Backtest <span class="text-terminal-accent">Research</span> Lab</h1>
+            <p class="text-gray-500 font-mono text-xs tracking-[0.3em] uppercase">Institutional Strategy Validation Engine • by RSK</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="bg-terminal-card border border-terminal-border rounded-xl p-6 md:p-8 shadow-2xl">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                <div class="space-y-2">
+                    <label class="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Start Date</label>
+                    <input type="date" id="startDate" class="w-full bg-terminal-bg border border-terminal-border rounded-lg p-3 text-white focus:border-terminal-accent outline-none transition-all">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-[10px] font-mono text-gray-500 uppercase tracking-widest">End Date</label>
+                    <input type="date" id="endDate" class="w-full bg-terminal-bg border border-terminal-border rounded-lg p-3 text-white focus:border-terminal-accent outline-none transition-all">
+                </div>
+                <button onclick="runBacktest()" id="runBtn" class="bg-terminal-accent hover:bg-terminal-accent/80 text-white font-black py-3.5 rounded-lg transition-all flex items-center justify-center shadow-lg shadow-terminal-accent/20">
+                    <span id="btnText">RUN BACKTEST</span>
+                    <div id="loader" class="hidden ml-3 w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Grid -->
+        <div id="resultsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 opacity-50 transition-opacity duration-500">
+            <!-- Accuracy -->
+            <div class="bg-terminal-card border border-terminal-border p-6 rounded-xl">
+                <p class="text-[10px] font-mono text-gray-500 uppercase mb-2">Accuracy</p>
+                <h3 id="accuracy" class="text-3xl font-black text-white">--</h3>
+            </div>
+            <!-- Profit Pts -->
+            <div class="bg-terminal-card border border-terminal-border p-6 rounded-xl">
+                <p class="text-[10px] font-mono text-gray-500 uppercase mb-2">Profit Pts</p>
+                <h3 id="profitPts" class="text-3xl font-black text-terminal-green">--</h3>
+            </div>
+            <!-- Loss Pts -->
+            <div class="bg-terminal-card border border-terminal-border p-6 rounded-xl">
+                <p class="text-[10px] font-mono text-gray-500 uppercase mb-2">Loss Pts</p>
+                <h3 id="lossPts" class="text-3xl font-black text-terminal-red">--</h3>
+            </div>
+            <!-- Total Pts -->
+            <div class="bg-terminal-card border border-terminal-border p-6 rounded-xl">
+                <p class="text-[10px] font-mono text-gray-500 uppercase mb-2">Total Pts</p>
+                <h3 id="totalPts" class="text-3xl font-black text-white">--</h3>
+            </div>
+            <!-- P&L in INR -->
+            <div id="pnlCard" class="bg-terminal-card border border-terminal-border p-6 rounded-xl transition-all duration-500">
+                <p class="text-[10px] font-mono text-gray-500 uppercase mb-2">P&L in ₹</p>
+                <h3 id="pnlInr" class="text-3xl font-black text-white">--</h3>
+            </div>
+        </div>
+
+        <div class="text-center text-[10px] font-mono text-gray-600 uppercase tracking-widest">
+            Institutional Data Processing • Secure Terminal Access
+        </div>
+    </div>
+
+    <script>
+        function runBacktest() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+
+            if (!start || !end) {
+                alert("Please select both dates.");
+                return;
+            }
+
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            const diffTime = Math.abs(endDate - startDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays > 90) {
+                alert("For accuracy, please select a maximum range of 3 months.");
+                return;
+            }
+
+            // UI Loading State
+            document.getElementById('runBtn').disabled = true;
+            document.getElementById('btnText').innerText = "PROCESSING...";
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('resultsGrid').classList.add('opacity-50');
+
+            // GAS Call
+            if (typeof google !== 'undefined') {
+                google.script.run
+                    .withSuccessHandler(updateUI)
+                    .withFailureHandler(handleError)
+                    .processBacktest(start, end);
+            } else {
+                // Mock for local testing
+                setTimeout(() => {
+                    updateUI([["72%"], ["1450"], ["320"], ["1130"], ["1,69,500"]]);
+                }, 2000);
+            }
+        }
+
+        function updateUI(data) {
+            // data is expected as [[H7], [H8], [H9], [H10], [H11]]
+            const results = data.map(row => row[0]);
+            
+            document.getElementById('accuracy').innerText = results[0];
+            document.getElementById('profitPts').innerText = results[1];
+            document.getElementById('lossPts').innerText = results[2];
+            document.getElementById('totalPts').innerText = results[3];
+            document.getElementById('pnlInr').innerText = results[4];
+
+            const pnlValue = parseFloat(results[4].replace(/[₹,]/g, ''));
+            const pnlCard = document.getElementById('pnlCard');
+            const pnlText = document.getElementById('pnlInr');
+
+            pnlCard.classList.remove('glow-green', 'glow-red');
+            if (pnlValue > 0) {
+                pnlCard.classList.add('glow-green');
+                pnlText.className = "text-3xl font-black text-terminal-green";
+            } else if (pnlValue < 0) {
+                pnlCard.classList.add('glow-red');
+                pnlText.className = "text-3xl font-black text-terminal-red";
+            } else {
+                pnlText.className = "text-3xl font-black text-white";
+            }
+
+            // Reset UI
+            document.getElementById('runBtn').disabled = false;
+            document.getElementById('btnText').innerText = "RUN BACKTEST";
+            document.getElementById('loader').classList.add('hidden');
+            document.getElementById('resultsGrid').classList.remove('opacity-50');
+        }
+
+        function handleError(err) {
+            alert("Error: " + err.message);
+            document.getElementById('runBtn').disabled = false;
+            document.getElementById('btnText').innerText = "RUN BACKTEST";
+            document.getElementById('loader').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

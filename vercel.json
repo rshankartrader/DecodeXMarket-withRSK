@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/api/backtest/current", "destination": "/api/backtest-current" },
+    { "source": "/api/backtest", "destination": "/api/backtest" },
+    { "source": "/api/admin/notify-registration", "destination": "/api/notify-registration" },
+    { "source": "/api/health", "destination": "/api/health" }
+  ]
+}

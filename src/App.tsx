@@ -247,11 +247,16 @@ const AuthPage = ({ onAuthSuccess, initialMode = 'login' }: { onAuthSuccess: () 
         
         // Check if user is locked
         const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists() && userDoc.data().isLocked) {
-          await signOut(auth);
-          setError("Your access to the terminal has been locked by the administrator. Please contact support.");
-          setLoading(false);
-          return;
+        if (userDoc.exists()) {
+          if (userDoc.data().isLocked) {
+            await signOut(auth);
+            setError("Your access to the terminal has been locked by the administrator. Please contact support.");
+            setLoading(false);
+            return;
+          }
+          await updateDoc(doc(db, 'users', user.uid), {
+            lastLogin: Timestamp.now()
+          }).catch(e => console.error("Could not update lastLogin:", e));
         }
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -293,7 +298,14 @@ const AuthPage = ({ onAuthSuccess, initialMode = 'login' }: { onAuthSuccess: () 
       }
       onAuthSuccess();
     } catch (err: any) {
-      setError(err.message);
+      console.error("Auth error:", err);
+      if (err.code === 'auth/network-request-failed') {
+        setError(`Network error: This usually happens if the domain '${window.location.hostname}' is not added to 'Authorized Domains' in the Firebase Console (Authentication -> Settings). Please also check if an ad-blocker is blocking Google Auth services.`);
+      } else if (err.code === 'auth/invalid-credential') {
+        setError("Invalid credentials: The email or password you entered is incorrect. If you haven't created an account yet, please switch to 'Register' mode. If you've forgotten your password, use the 'Forgot Password' link.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -635,6 +647,7 @@ const StatItem = ({ label, value, color = 'text-gray-300' }: { label: string, va
 
 export default function App() {
   const [view, setView] = useState<'landing' | 'dashboard' | 'backtest' | 'gann' | 'oi' | 'risk' | 'indicators' | 'auth' | 'pricing' | 'checkout' | 'user-management' | 'redeem-success'>('landing');
+  const [selectedPlanDetail, setSelectedPlanDetail] = useState<{ id: string; name: string; price: number; originalPrice: number; discount: number } | null>(null);
   const [redeemDuration, setRedeemDuration] = useState<string>('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [data, setData] = useState<MarketData>(MOCK_DATA);
@@ -667,8 +680,12 @@ export default function App() {
         try {
           const docRef = doc(db, 'users', currentUser.uid);
           const docSnap = await getDoc(docRef);
+          const nowTimestamp = Timestamp.now();
           if (docSnap.exists()) {
-            setUserProfile(docSnap.data());
+            await updateDoc(docRef, {
+              lastActive: nowTimestamp
+            }).catch(e => console.error("Could not update lastActive:", e));
+            setUserProfile({ ...docSnap.data(), lastActive: nowTimestamp });
           }
         } catch (err) {
           handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}`);
@@ -753,7 +770,7 @@ export default function App() {
           Our advanced institutional Open Interest decoder is currently being calibrated for maximum precision. 
           We are integrating real-time participant data streams to provide the most accurate sentiment analysis.
           <br /><br />
-          <span className="text-terminal-accent font-bold">Expected Deployment:</span> <span className="text-white font-bold">Q2 2026</span>
+          <span className="text-terminal-accent font-bold">Expected Deployment:</span> <span className="text-white font-bold">Q3 2027</span>
         </p>
       </motion.div>
     </div>
@@ -770,56 +787,127 @@ export default function App() {
       Papa.parse(csvText, {
         complete: (results) => {
           const rows = results.data as string[][];
-          const getCell = (r: number, c: number) => rows[r]?.[c] || '';
+          const getCell = (r: number, c: number) => (rows[r]?.[c] || '').trim();
 
-          // Participant View (A7:B10) -> Rows 6 to 9, Cols 0 to 1
+          // Find specific headers to make it more robust
+          let reversalsRow = -1;
+          let statsRow = -1;
+          let globalIndicesRow = -1;
+
+          for (let i = 0; i < Math.min(rows.length, 30); i++) {
+            const firstCell = getCell(i, 0).toLowerCase();
+            const rowStr = rows[i]?.join(' ').toLowerCase() || '';
+            
+            if (rowStr.includes('participants')) statsRow = i;
+            if (rowStr.includes('reversals') && reversalsRow === -1) reversalsRow = i;
+            if (rowStr.includes('global indices')) globalIndicesRow = i;
+          }
+
+          // Participant View (A7:B10 typical)
           const participants: ParticipantSentiment[] = [];
-          for (let i = 6; i <= 9; i++) {
+          const pStart = statsRow > -1 ? statsRow + 1 : 6;
+          for (let i = pStart; i < pStart + 4; i++) {
             const name = getCell(i, 0);
             const sentiment = getCell(i, 1) as any;
             if (name) participants.push({ name, sentiment: sentiment || 'Neutral' });
           }
 
-          // Global Indices (G4:G13) -> Rows 3 to 12, Col 6
-          // Price (H4:H13) -> Rows 3 to 12, Col 7
-          // % Change (J4:J13) -> Rows 3 to 12, Col 9
+          // Global Indices
           const globalIndices: GlobalIndex[] = [];
-          for (let i = 3; i <= 12; i++) {
+          const gStart = globalIndicesRow > -1 ? globalIndicesRow + 1 : 3;
+          for (let i = gStart; i < gStart + 10; i++) {
             const name = getCell(i, 6);
             const price = getCell(i, 7);
             const change = getCell(i, 9);
-            if (name) globalIndices.push({ name, price, change });
+            if (name && !name.toLowerCase().includes('india vix') && !name.toLowerCase().includes('view')) {
+              globalIndices.push({ name, price, change });
+            }
           }
 
+          // Reversals - Fetch strictly D8:D15 (index 7 to 14) and E8:E20 (index 7 to 19)
           const rev15: string[] = [];
           const rev5: string[] = [];
-          for (let i = 7; i <= 20; i++) {
-            const v15 = getCell(i, 3);
-            const v5 = getCell(i, 4);
-            if (v15) rev15.push(v15);
-            if (v5) rev5.push(v5);
+          
+          // Try to find specific column indices for 15M and 5M dynamically, defaulting to D and E (3 and 4)
+          // We look for cells containing "15" and "5" along with terms like "revers", "min", or "rev" to prevent matching bare prices (e.g. Sensex values like 75527.95)
+          let col15 = 3; // Default D
+          let col5 = 4;  // Default E
+          
+          for (let i = 0; i < Math.min(rows.length, 12); i++) {
+            const row = rows[i];
+            if (!row) continue;
+            for (let j = 0; j < row.length; j++) {
+              const cell = (row[j] || '').toLowerCase().trim();
+              if (cell.includes('15') && (cell.includes('revers') || cell.includes('min') || cell.includes('rev'))) {
+                col15 = j;
+              }
+              if (cell.includes('5') && !cell.includes('15') && (cell.includes('revers') || cell.includes('min') || cell.includes('rev'))) {
+                col5 = j;
+              }
+            }
           }
 
+          const timeRegex = /\d{1,2}:\d{2}/;
+
+          // 15M Rev: D8:D15 (index 7 to 14)
+          for (let i = 7; i <= 14; i++) {
+            const val = getCell(i, col15);
+            if (val && val !== "-" && val !== "" && timeRegex.test(val)) {
+              rev15.push(val);
+            }
+          }
+
+          // 5M Rev: E8:E20 (index 7 to 19)
+          for (let i = 7; i <= 19; i++) {
+            const val = getCell(i, col5);
+            if (val && val !== "-" && val !== "" && timeRegex.test(val)) {
+              rev5.push(val);
+            }
+          }
+
+          // Support & Resistance
           const support: string[] = [];
           const resistance: string[] = [];
-          for (let i = 13; i <= 20; i++) {
+          // Search for "Support" row specifically
+          let levelStart = -1;
+          for (let i = 0; i < rows.length; i++) {
+            if (getCell(i, 0).toLowerCase() === 'support' || getCell(i, 0).toLowerCase().includes('support')) {
+              levelStart = i + 1;
+              break;
+            }
+          }
+          
+          const sStart = levelStart > -1 ? levelStart : 13;
+          for (let i = sStart; i < sStart + 15; i++) {
             const s = getCell(i, 0);
             const r = getCell(i, 1);
-            if (s) support.push(s);
-            if (r) resistance.push(r);
+            if (s && !isNaN(parseFloat(s.replace(/,/g, '')))) support.push(s);
+            if (r && !isNaN(parseFloat(r.replace(/,/g, '')))) resistance.push(r);
+          }
+
+          // Find India Vix and Ranges dynamically if possible
+          let vix = '';
+          let dRange = '';
+          let wRange = '';
+          
+          for (let i = 0; i < Math.min(rows.length, 50); i++) {
+            const rowStr = rows[i]?.join(' ').toLowerCase() || '';
+            if (rowStr.includes('india vix')) vix = getCell(i, 7);
+            if (rowStr.includes('daily range')) dRange = `${getCell(i, 8)} - ${getCell(i, 9)}`;
+            if (rowStr.includes('weekly range')) wRange = `${getCell(i, 8)} - ${getCell(i, 9)}`;
           }
 
           setData({
             participants,
-            masterSignal: getCell(0, 3), // D1
-            decodedDate: getCell(2, 0), // A3
+            masterSignal: getCell(0, 3) || getCell(0, 2), // Try D1 then C1
+            decodedDate: getCell(2, 0) || getCell(0, 0), // A3 or A1
             globalIndices,
-            globalSentiment: getCell(13, 8), // I14
-            indiaVix: getCell(15, 7), // H16
-            dailyRange: `${getCell(16, 8)} - ${getCell(16, 9)}`, // I17 - J17
-            weeklyRange: `${getCell(17, 8)} - ${getCell(17, 9)}`, // I18 - J18
-            reversals15m: rev15,
-            reversals5m: rev5,
+            globalSentiment: getCell(13, 8) || 'Neutral', // Try I14
+            indiaVix: vix || getCell(15, 7),
+            dailyRange: dRange.includes('-') && dRange.length > 5 ? dRange : `${getCell(16, 8)} - ${getCell(16, 9)}`,
+            weeklyRange: wRange.includes('-') && wRange.length > 5 ? wRange : `${getCell(17, 8)} - ${getCell(17, 9)}`,
+            reversals15m: Array.from(new Set(rev15)), // Remove duplicates
+            reversals5m: Array.from(new Set(rev5)),
             support,
             resistance,
             lastUpdated: new Date().toLocaleTimeString(),
@@ -847,6 +935,14 @@ export default function App() {
     return 'text-terminal-accent';
   };
 
+  const getChangeColor = (change: string) => {
+    if (!change) return 'text-gray-400';
+    const cleanStr = change.trim();
+    if (cleanStr === '-' || cleanStr === '0' || cleanStr === '0.00' || cleanStr === '0.00%') return 'text-gray-400';
+    if (cleanStr.startsWith('-')) return 'text-terminal-red';
+    return 'text-terminal-green';
+  };
+
   const LandingPage = () => (
     <div className="flex-1 flex flex-col overflow-x-hidden">
       {/* Hero Section */}
@@ -862,6 +958,27 @@ export default function App() {
             <h1 className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter text-white leading-none mb-8">
               DECODE<span className="text-terminal-accent">X</span>MARKET
             </h1>
+            
+            {/* Pulse Indicator */}
+            <div className="flex items-center justify-center space-x-4 mb-8">
+              <div className="flex items-center space-x-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
+                <motion.div 
+                  animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  className="w-2 h-2 rounded-full bg-terminal-green shadow-[0_0_10px_rgba(34,197,94,0.5)]" 
+                />
+                <span className="text-[10px] font-mono text-terminal-green uppercase tracking-widest">System Active</span>
+              </div>
+              <div className="flex items-center space-x-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
+                <motion.div 
+                  animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                  className="w-2 h-2 rounded-full bg-terminal-accent shadow-[0_0_10px_rgba(242,125,38,0.5)]" 
+                />
+                <span className="text-[10px] font-mono text-terminal-accent uppercase tracking-widest">Live Data Feed</span>
+              </div>
+            </div>
+
             <p className="text-base sm:text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-12 leading-relaxed px-4">
               The ultimate institutional-grade terminal for Indian Indices. 
               Real-time sentiment decoding, reversal timings, and precision technical levels.
@@ -978,8 +1095,13 @@ export default function App() {
 
     const priceInfo = getPriceInfo();
 
+    const activePlanName = selectedPlanDetail ? selectedPlanDetail.name : "Become a Pro Trader";
+    const activePlanPrice = selectedPlanDetail ? selectedPlanDetail.price : priceInfo.price;
+    const activePlanOriginalPrice = selectedPlanDetail ? selectedPlanDetail.originalPrice : priceInfo.originalPrice;
+    const activePlanDiscount = selectedPlanDetail ? selectedPlanDetail.discount : priceInfo.discount;
+
     const handleConfirmPayment = () => {
-      const message = encodeURIComponent(`Hello RSK, I have completed the payment of ₹${priceInfo.price} for DecodeXMarket Lifetime Access. My Email: ${user?.email || 'N/A'}. Please verify and grant access.`);
+      const message = encodeURIComponent(`Hello RSK, I have completed the payment of ₹${activePlanPrice} for DecodeXMarket ${activePlanName}. My Email: ${user?.email || 'N/A'}. Please verify and grant access.`);
       window.open(`https://wa.me/918271890090?text=${message}`, '_blank');
     };
 
@@ -999,19 +1121,19 @@ export default function App() {
         let message = "";
 
         if (code === "RADHERADHE" || code === userProfile?.accessCode) {
-          updateData = { accessLevel: 1 };
+          updateData = { accessLevel: 1, redeemedCode: code };
           message = "Lifetime Access Activated! Radhe Radhe!";
           setRedeemDuration("LIFETIME");
         } else if (code === "RSK3") {
           const expiry = new Date();
           expiry.setMonth(expiry.getMonth() + 3);
-          updateData = { accessExpiry: Timestamp.fromDate(expiry) };
+          updateData = { accessExpiry: Timestamp.fromDate(expiry), accessLevel: 0, redeemedCode: "RSK3" };
           message = "3 Months Access Activated!";
           setRedeemDuration("3 MONTHS");
         } else if (code === "THERSK6") {
           const expiry = new Date();
           expiry.setMonth(expiry.getMonth() + 6);
-          updateData = { accessExpiry: Timestamp.fromDate(expiry) };
+          updateData = { accessExpiry: Timestamp.fromDate(expiry), accessLevel: 0, redeemedCode: "THERSK6" };
           message = "6 Months Access Activated!";
           setRedeemDuration("6 MONTHS");
         } else {
@@ -1090,25 +1212,25 @@ export default function App() {
             <div className="text-center space-y-2">
               <ShieldCheck className="w-12 h-12 text-terminal-accent mx-auto mb-4" />
               <h2 className="text-2xl font-black text-white uppercase">Secure Checkout</h2>
-              <p className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Lifetime Pro Access</p>
+              <p className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">{selectedPlanDetail ? selectedPlanDetail.name : "Lifetime Pro Access"}</p>
             </div>
 
             <div className="bg-white/5 rounded-lg p-6 space-y-4 border border-white/5">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-mono text-gray-400 uppercase">Plan</span>
-                <span className="text-xs font-bold text-white uppercase">Become a Pro Trader</span>
+                <span className="text-xs font-bold text-white uppercase">{activePlanName}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs font-mono text-gray-400 uppercase">Base Price</span>
-                <span className="text-xs font-bold text-gray-500 line-through">₹{priceInfo.originalPrice.toLocaleString()}</span>
+                <span className="text-xs font-bold text-gray-500 line-through">₹{activePlanOriginalPrice.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs font-mono text-gray-400 uppercase">Discount ({priceInfo.discount}%)</span>
-                <span className="text-xs font-bold text-terminal-green">-₹{(priceInfo.originalPrice - priceInfo.price).toLocaleString()}</span>
+                <span className="text-xs font-mono text-gray-400 uppercase">Discount ({activePlanDiscount}%)</span>
+                <span className="text-xs font-bold text-terminal-green">-₹{(activePlanOriginalPrice - activePlanPrice).toLocaleString()}</span>
               </div>
               <div className="pt-4 border-t border-white/10 flex justify-between items-center">
                 <span className="text-sm font-black text-white uppercase">Total Payable</span>
-                <span className="text-2xl font-black text-terminal-accent">₹{priceInfo.price.toLocaleString()}</span>
+                <span className="text-2xl font-black text-terminal-accent">₹{activePlanPrice.toLocaleString()}</span>
               </div>
             </div>
 
@@ -1211,6 +1333,81 @@ export default function App() {
       }
     };
 
+    const updateExpiry = async (userId: string, newDate: string) => {
+      try {
+        const expiryTimestamp = Timestamp.fromDate(new Date(newDate));
+        await updateDoc(doc(db, 'users', userId), {
+          accessExpiry: expiryTimestamp,
+          accessLevel: 0 // Ensure it's treated as temporary access
+        });
+        setUsers(users.map(u => u.id === userId ? { ...u, accessExpiry: expiryTimestamp, accessLevel: 0 } : u));
+        alert("Expiry date updated successfully.");
+      } catch (err) {
+        console.error("Error updating expiry:", err);
+        alert("Failed to update expiry date.");
+      }
+    };
+
+    const updateAccessCode = async (userId: string, newCode: string) => {
+      try {
+        const cleanCode = newCode.trim().toUpperCase();
+        await updateDoc(doc(db, 'users', userId), {
+          accessCode: cleanCode || null
+        });
+        setUsers(users.map(u => u.id === userId ? { ...u, accessCode: cleanCode || null } : u));
+      } catch (err) {
+        console.error("Error updating access code:", err);
+        alert("Failed to update coupon code.");
+      }
+    };
+
+    const updateRedeemedCodeUpdated = async (userId: string, code: string) => {
+      try {
+        const cleanCode = code.trim().toUpperCase();
+        let updateData: any = {};
+        
+        if (!cleanCode) {
+          updateData = {
+            redeemedCode: null,
+            accessLevel: 0,
+            accessExpiry: null
+          };
+        } else if (cleanCode === 'RADHERADHE') {
+          updateData = {
+            redeemedCode: 'RADHERADHE',
+            accessLevel: 1,
+            accessExpiry: null
+          };
+        } else if (cleanCode === 'RSK3') {
+          const expiry = new Date();
+          expiry.setMonth(expiry.getMonth() + 3);
+          updateData = {
+            redeemedCode: 'RSK3',
+            accessLevel: 0,
+            accessExpiry: Timestamp.fromDate(expiry)
+          };
+        } else if (cleanCode === 'THERSK6') {
+          const expiry = new Date();
+          expiry.setMonth(expiry.getMonth() + 6);
+          updateData = {
+            redeemedCode: 'THERSK6',
+            accessLevel: 0,
+            accessExpiry: Timestamp.fromDate(expiry)
+          };
+        } else {
+          updateData = {
+            redeemedCode: cleanCode
+          };
+        }
+
+        await updateDoc(doc(db, 'users', userId), updateData);
+        setUsers(users.map(u => u.id === userId ? { ...u, ...updateData } : u));
+      } catch (err) {
+        console.error("Error updating redeemed code:", err);
+        alert("Failed to update redeemed code and access.");
+      }
+    };
+
     if (loading) {
       return (
         <div className="flex-1 flex items-center justify-center">
@@ -1228,6 +1425,28 @@ export default function App() {
           </button>
         </div>
 
+        {/* Informational Panel of Global System Codes */}
+        <div className="p-6 bg-terminal-accent/5 border border-terminal-accent/20 rounded-xl space-y-3">
+          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-terminal-accent">Shared System Coupon Codes</h3>
+          <p className="text-xs text-gray-400 font-sans">
+            These global codes are built into the payment gateway checker and can be used immediately by any registered user:
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs text-white">
+            <div className="p-3 bg-white/5 border border-white/10 rounded-lg flex justify-between items-center">
+              <span>RADHERADHE</span>
+              <span className="text-terminal-green font-bold">Lifetime Free</span>
+            </div>
+            <div className="p-3 bg-white/5 border border-white/10 rounded-lg flex justify-between items-center">
+              <span>RSK3</span>
+              <span className="text-terminal-accent font-bold">3 Months Access</span>
+            </div>
+            <div className="p-3 bg-white/5 border border-white/10 rounded-lg flex justify-between items-center">
+              <span>THERSK6</span>
+              <span className="text-terminal-accent font-bold">6 Months Access</span>
+            </div>
+          </div>
+        </div>
+
         <div className="terminal-card overflow-hidden border-terminal-border">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -1235,6 +1454,7 @@ export default function App() {
                 <tr className="bg-white/5 border-b border-terminal-border">
                   <th className="px-6 py-4 text-[10px] font-mono text-terminal-accent uppercase tracking-widest">User Details</th>
                   <th className="px-6 py-4 text-[10px] font-mono text-terminal-accent uppercase tracking-widest">Access Level</th>
+                  <th className="px-6 py-4 text-[10px] font-mono text-terminal-accent uppercase tracking-widest">Coupon Code</th>
                   <th className="px-6 py-4 text-[10px] font-mono text-terminal-accent uppercase tracking-widest">Status</th>
                   <th className="px-6 py-4 text-[10px] font-mono text-terminal-accent uppercase tracking-widest text-right">Actions</th>
                 </tr>
@@ -1249,23 +1469,115 @@ export default function App() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-mono text-gray-300 uppercase">
-                          {u.accessLevel === 1 ? 'Lifetime Pro' : 'Basic / Trial'}
-                        </span>
-                        {u.accessExpiry && (
-                          <span className="text-[10px] font-mono text-terminal-accent">
-                            Expires: {u.accessExpiry.toDate().toLocaleDateString()}
+                      <div className="flex flex-col space-y-2">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-mono text-gray-300 uppercase">
+                            {u.accessLevel === 1 ? 'Lifetime Pro' : 'Basic / Trial'}
                           </span>
-                        )}
+                          {u.accessExpiry && (
+                            <span className="text-[10px] font-mono text-terminal-accent">
+                              Expires: {u.accessExpiry.toDate().toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <input 
+                          type="date" 
+                          className="bg-white/5 border border-terminal-border rounded px-2 py-1 text-[10px] font-mono text-white focus:border-terminal-accent outline-none"
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              updateExpiry(u.id, e.target.value);
+                            }
+                          }}
+                        />
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {u.isLocked ? (
-                        <span className="px-2 py-1 rounded bg-red-500/10 text-red-500 text-[10px] font-mono uppercase border border-red-500/20">Locked</span>
-                      ) : (
-                        <span className="px-2 py-1 rounded bg-terminal-green/10 text-terminal-green text-[10px] font-mono uppercase border border-terminal-green/20">Active</span>
-                      )}
+                      <div className="flex flex-col space-y-3">
+                        {/* Redeemed Code Selector & Editor */}
+                        <div className="flex flex-col space-y-1">
+                          <span className="text-[9px] font-mono text-terminal-accent uppercase tracking-wide">Redeemed Code</span>
+                          <select
+                            value={['RADHERADHE', 'RSK3', 'THERSK6', ''].includes(u.redeemedCode || '') ? (u.redeemedCode || '') : 'CUSTOM'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val !== 'CUSTOM') {
+                                updateRedeemedCodeUpdated(u.id, val);
+                              }
+                            }}
+                            className="bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-xs font-mono text-white focus:border-terminal-accent outline-none w-44 tracking-wide transition-all"
+                          >
+                            <option value="">None / Basic</option>
+                            <option value="RADHERADHE">RADHERADHE (Lifetime)</option>
+                            <option value="RSK3">RSK3 (3 Months)</option>
+                            <option value="THERSK6">THERSK6 (6 Months)</option>
+                            <option value="CUSTOM">Custom Input...</option>
+                          </select>
+                          
+                          {(!['RADHERADHE', 'RSK3', 'THERSK6', ''].includes(u.redeemedCode || '')) && (
+                            <input 
+                              type="text" 
+                              placeholder="ENTER CUSTOM CODE" 
+                              defaultValue={u.redeemedCode || ''}
+                              onBlur={(e) => updateRedeemedCodeUpdated(u.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  updateRedeemedCodeUpdated(u.id, (e.target as HTMLInputElement).value);
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="mt-1 bg-white/5 border border-terminal-border rounded px-2 py-1 text-xs font-mono text-white focus:border-terminal-accent outline-none w-44 uppercase tracking-wide transition-all"
+                            />
+                          )}
+                        </div>
+
+                        {/* Referral Promo Code (For users sharing access codes) */}
+                        <div className="flex flex-col space-y-1">
+                          <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wide">User Referral Code</span>
+                          <input 
+                            type="text" 
+                            placeholder="NO REFERRAL CODE" 
+                            defaultValue={u.accessCode || ''}
+                            onBlur={(e) => updateAccessCode(u.id, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                updateAccessCode(u.id, (e.target as HTMLInputElement).value);
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            className="bg-white/5 border border-terminal-border rounded px-2 py-1 text-xs font-mono text-white focus:border-terminal-accent outline-none w-44 uppercase tracking-wide transition-all"
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col space-y-2">
+                        <div>
+                          {u.isLocked ? (
+                            <span className="px-2 py-1 rounded bg-red-500/10 text-red-500 text-[10px] font-mono uppercase border border-red-500/20">Locked</span>
+                          ) : (
+                            <span className="px-2 py-1 rounded bg-terminal-green/10 text-terminal-green text-[10px] font-mono uppercase border border-terminal-green/20">Active</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-mono text-gray-500 uppercase tracking-tighter">Last Active/Visit</span>
+                          <span className="text-xs font-mono text-gray-300">
+                            {(() => {
+                              const activeTime = u.lastActive || u.lastLogin || u.createdAt;
+                              if (!activeTime) return 'Never';
+                              try {
+                                const dateObj = typeof activeTime.toDate === 'function' ? activeTime.toDate() : new Date(activeTime);
+                                return dateObj.toLocaleString('en-IN', {
+                                  dateStyle: 'medium',
+                                  timeStyle: 'short',
+                                  hour12: true
+                                });
+                              } catch (e) {
+                                return 'Never';
+                              }
+                            })()}
+                          </span>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button 
@@ -1332,13 +1644,14 @@ export default function App() {
           <div className="text-2xl font-black text-white uppercase tracking-tight">
             {data.masterSignal}
           </div>
-          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-            <span className="text-[8px] font-mono text-gray-500 uppercase tracking-wider">Access Status</span>
-            <span className={`text-[9px] font-bold uppercase tracking-widest ${userProfile?.accessLevel === 1 ? 'text-terminal-green' : 'text-terminal-accent'}`}>
-              {userProfile?.accessLevel === 1 ? 'Lifetime Pro' : (
-                <>Expiry: {userProfile?.accessExpiry ? userProfile.accessExpiry.toDate().toLocaleDateString() : '30 Days Trial'}</>
-              )}
-            </span>
+          <div className="mt-4 pt-4 border-t border-white/5 flex flex-col space-y-1">
+            <motion.span 
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="text-[9px] font-bold text-terminal-accent uppercase tracking-widest"
+            >
+              Data Valid For Next Trading Session
+            </motion.span>
           </div>
         </div>
 
@@ -1380,7 +1693,7 @@ export default function App() {
                   <span className="text-[10px] font-mono text-gray-400 uppercase">{idx.name}</span>
                   <span className="text-xs font-bold text-white">{idx.price}</span>
                 </div>
-                <span className={`text-[10px] font-bold ${idx.change.startsWith('+') ? 'text-terminal-green' : 'text-terminal-red'}`}>
+                <span className={`text-[10px] font-bold ${getChangeColor(idx.change)}`}>
                   {idx.change}
                 </span>
               </div>
@@ -1420,6 +1733,15 @@ export default function App() {
             <Clock className="w-3 h-3 text-gray-500 mr-2" />
             <span className="text-[10px] font-mono text-gray-500 uppercase">SYNC: {data.lastUpdated}</span>
           </div>
+        </div>
+
+        <div className="terminal-card p-4 bg-terminal-card border-dashed border-terminal-border">
+          <h4 className="text-[10px] font-mono text-gray-500 uppercase mb-2">Market Insights</h4>
+          <p className="text-xs text-gray-400 italic leading-relaxed">
+            "Market sentiment is currently {data.globalSentiment.toLowerCase()}. 
+            India VIX is at {data.indiaVix}, suggesting {parseFloat(data.indiaVix) > 18 ? 'high' : 'moderate'} volatility. 
+            Monitor reversal timings for entry/exit precision."
+          </p>
         </div>
       </div>
 
@@ -1490,15 +1812,6 @@ export default function App() {
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="terminal-card p-4 bg-terminal-card border-dashed border-terminal-border">
-          <h4 className="text-[10px] font-mono text-gray-500 uppercase mb-2">Market Insights</h4>
-          <p className="text-xs text-gray-400 italic leading-relaxed">
-            "Market sentiment is currently {data.globalSentiment.toLowerCase()}. 
-            India VIX is at {data.indiaVix}, suggesting {parseFloat(data.indiaVix) > 18 ? 'high' : 'moderate'} volatility. 
-            Monitor reversal timings for entry/exit precision."
-          </p>
         </div>
       </div>
     </div>
@@ -2107,6 +2420,15 @@ export default function App() {
   };
 
   const PricingPage = () => {
+    const [selectedCustomDuration, setSelectedCustomDuration] = useState('3m');
+
+    const customPlans = [
+      { id: '1m', name: '1 Month Access Plan', price: 999, originalPrice: 1399, discount: 29 },
+      { id: '3m', name: '3 Month Access Plan', price: 2999, originalPrice: 4199, discount: 29 },
+      { id: '6m', name: '6 Month Access Plan', price: 5999, originalPrice: 8399, discount: 29 },
+      { id: '1y', name: 'Yearly Access Plan', price: 11999, originalPrice: 16799, discount: 29 },
+    ];
+
     const getPriceInfo = () => {
       const basePrice = 25999;
       const earlyBirdPrice = 15599;
@@ -2180,7 +2502,7 @@ export default function App() {
           {/* Pro Trader Box */}
           <div className="terminal-card p-8 flex flex-col relative border-terminal-accent shadow-[0_0_30px_rgba(242,125,38,0.2)] bg-terminal-accent/5 overflow-hidden">
             <div className="absolute top-4 -right-12 bg-red-600 text-white text-[10px] font-black px-12 py-1 rotate-45 uppercase tracking-widest shadow-lg">
-              LIMIT TIME
+              LIFETIME
             </div>
             <div className="space-y-4 mb-8">
               <div className="flex items-center space-x-2">
@@ -2202,7 +2524,7 @@ export default function App() {
               {[
                 'Full Trading Terminal',
                 'Institutional O.I Decoder',
-                'Premium Indicators',
+                'Fibonacci Pro Indicator Free',
                 'Advanced S&R Levels',
                 'Reversal Timings',
                 'Private Community',
@@ -2216,11 +2538,60 @@ export default function App() {
               ))}
             </ul>
             <button 
-              onClick={() => setView('checkout')}
+              onClick={() => {
+                setSelectedPlanDetail(null);
+                setView('checkout');
+              }}
               className="w-full py-5 rounded font-black text-sm uppercase tracking-[0.3em] transition-all bg-terminal-accent text-black hover:bg-terminal-accent/90 shadow-[0_0_20px_rgba(242,125,38,0.4)]"
             >
               Claim Discount
             </button>
+          </div>
+        </div>
+
+        {/* Custom Plans Box */}
+        <div className="max-w-5xl mx-auto pt-4">
+          <div className="terminal-card p-6 md:p-8 border border-terminal-border bg-gradient-to-r from-terminal-accent/5 to-white/[0.02] flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-terminal-accent/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="space-y-3 text-left max-w-xl">
+              <div className="flex items-center space-x-2">
+                <span className="px-2 py-0.5 rounded text-[9px] font-mono bg-terminal-accent/10 border border-terminal-accent/20 text-terminal-accent uppercase tracking-wider font-bold">Limited Time Option</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-terminal-accent animate-pulse" />
+              </div>
+              <h3 className="text-xl font-black text-white uppercase tracking-tighter">Custom Plans</h3>
+              <p className="text-[11px] font-mono text-gray-400 uppercase leading-relaxed">
+                Same elite premium features (Full Trading Terminal, O.I Decoder, Fibonacci Pro Indicator Free, Advanced Levels, private community) but only for a limited duration. Perfect for testing and custom tailored access.
+              </p>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shrink-0 w-full md:w-auto">
+              <div className="flex flex-col space-y-1.5 min-w-[200px]">
+                <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest font-bold">Select Active Plan</span>
+                <select
+                  value={selectedCustomDuration}
+                  onChange={(e) => setSelectedCustomDuration(e.target.value)}
+                  className="bg-terminal-bg border border-terminal-border rounded-lg px-3 py-3 text-xs font-mono text-white focus:border-terminal-accent outline-none"
+                >
+                  <option value="1m">1 Month Access — ₹999</option>
+                  <option value="3m">3 Month Access — ₹2999</option>
+                  <option value="6m">6 Month Access — ₹5999</option>
+                  <option value="1y">Yearly — ₹11999</option>
+                </select>
+              </div>
+              
+              <button
+                onClick={() => {
+                  const selectedPlan = customPlans.find(p => p.id === selectedCustomDuration);
+                  if (selectedPlan) {
+                    setSelectedPlanDetail(selectedPlan);
+                    setView('checkout');
+                  }
+                }}
+                className="py-3 px-6 rounded font-black text-xs uppercase tracking-widest bg-white hover:bg-white/90 text-black transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] self-end"
+              >
+                Checkout Access
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -2551,6 +2922,33 @@ export default function App() {
     );
   };
 
+  const TickerContent = () => (
+    <>
+      <div className="flex items-center space-x-12 px-4">
+        <div className="flex items-center space-x-2">
+          <span className="text-[10px] text-gray-500 uppercase font-mono">INDIA VIX:</span>
+          <span className="text-xs font-bold text-terminal-accent">{data.indiaVix}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span className="text-[10px] text-gray-500 uppercase font-mono">GLOBAL SENTIMENT:</span>
+          <span className={`text-xs font-bold ${getSentimentColor(data.globalSentiment)}`}>{data.globalSentiment}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span className="text-[10px] text-gray-500 uppercase font-mono">MASTER SIGNAL:</span>
+          <span className="text-xs font-bold text-white bg-terminal-accent/20 px-2 py-0.5 rounded">{data.masterSignal}</span>
+        </div>
+        {data.globalIndices.map((idx, i) => (
+          <div key={i} className="flex items-center space-x-2">
+            <span className="text-[10px] text-gray-500 uppercase font-mono">{idx.name}:</span>
+            <span className={`text-xs font-bold ${getChangeColor(idx.change)}`}>
+              {idx.change}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
   const menuItems = [
     { label: 'HOME', icon: Monitor, view: 'landing' },
     { label: 'TRADING TERMINAL', icon: Activity, view: 'dashboard' },
@@ -2770,35 +3168,17 @@ export default function App() {
       {/* Pulse Header (Only on Dashboard) */}
       {view === 'dashboard' && (
         <header className="bg-terminal-card border-b border-terminal-border h-12 flex items-center overflow-hidden">
-          <div className="px-4 border-r border-terminal-border h-full flex items-center bg-terminal-bg z-10">
+          <div className="px-4 border-r border-terminal-border h-full flex items-center bg-terminal-bg z-20">
             <Activity className="w-4 h-4 text-terminal-accent mr-2" />
             <span className="text-xs font-bold tracking-widest uppercase">PULSE</span>
           </div>
-          <div className="flex-1 overflow-hidden relative">
-            <div className="ticker-scroll flex items-center space-x-12 px-4">
-              <div className="flex items-center space-x-2">
-                <span className="text-[10px] text-gray-500 uppercase font-mono">INDIA VIX:</span>
-                <span className="text-xs font-bold text-terminal-accent">{data.indiaVix}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-[10px] text-gray-500 uppercase font-mono">GLOBAL SENTIMENT:</span>
-                <span className={`text-xs font-bold ${getSentimentColor(data.globalSentiment)}`}>{data.globalSentiment}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-[10px] text-gray-500 uppercase font-mono">MASTER SIGNAL:</span>
-                <span className="text-xs font-bold text-white bg-terminal-accent/20 px-2 py-0.5 rounded">{data.masterSignal}</span>
-              </div>
-              {data.globalIndices.map((idx, i) => (
-                <div key={i} className="flex items-center space-x-2">
-                  <span className="text-[10px] text-gray-500 uppercase font-mono">{idx.name}:</span>
-                  <span className={`text-xs font-bold ${idx.change.startsWith('+') ? 'text-terminal-green' : 'text-terminal-red'}`}>
-                    {idx.change}
-                  </span>
-                </div>
-              ))}
+          <div className="flex-1 overflow-hidden relative flex items-center">
+            <div className="ticker-scroll flex items-center">
+              <TickerContent />
+              <TickerContent />
             </div>
           </div>
-          <div className="px-4 border-l border-terminal-border h-full flex items-center bg-terminal-bg z-10">
+          <div className="px-4 border-l border-terminal-border h-full flex items-center bg-terminal-bg z-20">
             <button 
               onClick={fetchData}
               disabled={loading}
@@ -2856,6 +3236,10 @@ export default function App() {
               Where Data meets Time Cycles. An educational platform for market analysis enthusiasts.
             </p>
             <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">NIFTY</span>
+              </div>
               <div className="flex items-center space-x-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-terminal-green" />
                 <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">SENSEX</span>

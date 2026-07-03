@@ -49,9 +49,27 @@ service cloud.firestore {
              (!('isLocked' in data) || data.isLocked is bool);
     }
 
+    function isValidSetting(data) {
+      return data.keys().hasAll(['url']) &&
+             data.url is string && data.url.size() <= 2048 &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 100));
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
+
+    match /settings/{settingId} {
+      // Allow anyone to read the system settings
+      allow read: if true;
+      // Allow anyone to create, update, or delete system settings with validation
+      allow write: if request.resource == null || isValidSetting(request.resource.data);
+    }
+
+    match /test/{testId} {
+      // Allow anyone to read connection test document
+      allow read: if true;
+    }
 
     match /users/{userId} {
       // Users can only read their own profile, unless they are an admin

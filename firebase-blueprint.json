@@ -13,12 +13,26 @@
         "lastLogin": { "type": "string", "format": "date-time", "description": "Timestamp of last login." }
       },
       "required": ["uid", "email", "role"]
+    },
+    "Setting": {
+      "title": "System Setting",
+      "description": "Stores system settings and custom URLs.",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "The custom planetary transits Google Sheets API URL." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when this setting was last updated." }
+      },
+      "required": ["url"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
       "description": "Collection of user profiles."
+    },
+    "/settings/{settingId}": {
+      "schema": "Setting",
+      "description": "Collection of global system settings."
     }
   }
 }

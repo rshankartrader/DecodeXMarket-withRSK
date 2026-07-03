@@ -58,6 +58,12 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
+import AstrologySection from './components/AstrologySection';
+import GannConceptsSection from './components/GannConceptsSection';
+import StockMarketNewsSection from './components/StockMarketNewsSection';
+import AstroAiChat from './components/AstroAiChat';
+import { Sparkles, Compass, Newspaper } from 'lucide-react';
+
 // --- Types ---
 
 interface ParticipantSentiment {
@@ -647,6 +653,7 @@ const StatItem = ({ label, value, color = 'text-gray-300' }: { label: string, va
 
 export default function App() {
   const [view, setView] = useState<'landing' | 'dashboard' | 'backtest' | 'gann' | 'oi' | 'risk' | 'indicators' | 'auth' | 'pricing' | 'checkout' | 'user-management' | 'redeem-success'>('landing');
+  const [dashboardTab, setDashboardTab] = useState<'dashboard' | 'astrology' | 'gann' | 'news'>('dashboard');
   const [selectedPlanDetail, setSelectedPlanDetail] = useState<{ id: string; name: string; price: number; originalPrice: number; discount: number } | null>(null);
   const [redeemDuration, setRedeemDuration] = useState<string>('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -656,6 +663,12 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+
+  useEffect(() => {
+    if (view === 'dashboard') {
+      setDashboardTab('dashboard');
+    }
+  }, [view]);
 
   // Test connection to Firestore
   useEffect(() => {
@@ -3191,6 +3204,35 @@ export default function App() {
         </header>
       )}
 
+      {/* Dashboard Sub-navigation (Below Pulse) */}
+      {view === 'dashboard' && (
+        <div className="bg-terminal-card border-b border-terminal-border px-4 flex items-center space-x-1 overflow-x-auto py-1.5 scrollbar-none">
+          {[
+            { id: 'dashboard', label: 'Dashboard', icon: Monitor },
+            { id: 'astrology', label: 'Astrological Section', icon: Sparkles },
+            { id: 'gann', label: 'Gann Concepts', icon: Compass },
+            { id: 'news', label: 'Stock Market News', icon: Newspaper }
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = dashboardTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setDashboardTab(tab.id as any)}
+                className={`flex items-center px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-widest transition-all rounded cursor-pointer border ${
+                  isActive 
+                    ? 'bg-terminal-accent text-white border-terminal-accent/30 shadow-[0_0_10px_rgba(59,130,246,0.15)]' 
+                    : 'text-gray-400 hover:text-white hover:bg-white/5 border-transparent'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 mr-2 ${isActive ? 'text-white' : 'text-gray-500'}`} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* View Content */}
       <main className="flex-1 flex flex-col">
         {!authReady ? (
@@ -3202,7 +3244,15 @@ export default function App() {
         ) : view === 'landing' ? (
           <LandingPage />
         ) : view === 'dashboard' ? (
-          <Dashboard />
+          dashboardTab === 'dashboard' ? (
+            <Dashboard />
+          ) : dashboardTab === 'astrology' ? (
+            <AstrologySection isAdmin={user?.email === 'rshankartrader@gmail.com' || userProfile?.role === 'admin'} />
+          ) : dashboardTab === 'gann' ? (
+            <GannConceptsSection />
+          ) : dashboardTab === 'news' ? (
+            <StockMarketNewsSection />
+          ) : null
         ) : view === 'backtest' ? (
           <BacktestLab />
         ) : view === 'oi' ? (
@@ -3321,6 +3371,9 @@ export default function App() {
           <span className="text-[10px] font-mono text-gray-600">SYSTEM STATUS: <span className="text-terminal-green">OPTIMAL</span></span>
         </div>
       </footer>
+
+      {/* Astro AI Floating Copilot */}
+      {view === 'dashboard' && dashboardTab === 'astrology' && <AstroAiChat />}
     </div>
   );
 }

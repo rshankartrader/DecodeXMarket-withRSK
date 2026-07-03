@@ -37,3 +37,11 @@
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

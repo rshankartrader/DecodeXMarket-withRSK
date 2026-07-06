@@ -164,7 +164,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
 
   const [selectedTransit, setSelectedTransit] = useState<TransitAspect | null>(null);
   const [selectedYear, setSelectedYear] = useState<number | string>(2026);
-  const [showConfig, setShowConfig] = useState<boolean>(false);
+
 
   // Dynamic aspect filter and search states
   const [selectedAspectType, setSelectedAspectType] = useState<string>("ALL");
@@ -172,38 +172,19 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
   const [timeFilter, setTimeFilter] = useState<"ALL" | "UPCOMING" | "PAST">("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Dynamic Google Sheets sync states
-  const [customSourceUrl, setCustomSourceUrl] = useState<string>(() => {
-    return localStorage.getItem("planetary_transits_custom_url") || "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec";
-  });
-  const [inputUrl, setInputUrl] = useState<string>(customSourceUrl);
+  // Permanently saved Google Sheets Web App URL for Transit Aspects
+  const customSourceUrl = "https://script.google.com/macros/s/AKfycbxEcG9hykxB_N3aSi1Q8Qlipn3XtuTcNoCs62_RM9cIsIU357K9TygKIW3hkQKmNkmTVA/exec";
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<"loading" | "synced" | "error" | "idle">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [copiedCode, setCopiedCode] = useState<boolean>(false);
-  const [showConfirmReset, setShowConfirmReset] = useState<boolean>(false);
 
-  const loadTransitData = async (targetUrl?: string) => {
-    const urlToUse = targetUrl !== undefined ? targetUrl : customSourceUrl;
-    if (!urlToUse.trim()) {
-      setSyncStatus("idle");
-      return;
-    }
-
-    // Validate URL format before fetching (Google Apps Script Web App format)
-    const isValidPattern = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec\/?(\?.*)?$/.test(urlToUse.trim());
-    if (!isValidPattern) {
-      setErrorMsg("Invalid URL. Data Source URL must be a valid Google Apps Script Web App link in the format: https://script.google.com/macros/s/.../exec");
-      setSyncStatus("error");
-      return;
-    }
-
+  const loadTransitData = async () => {
     try {
       setIsLoading(true);
       setSyncStatus("loading");
       setErrorMsg(null);
 
-      const apiEndpoint = `/api/planetary-transits?url=${encodeURIComponent(urlToUse.trim())}`;
+      const apiEndpoint = `/api/planetary-transits?url=${encodeURIComponent(customSourceUrl)}`;
       let response;
       let json;
       try {
@@ -220,8 +201,8 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
       // If server-side API didn't work (e.g. running on a static host like Vercel/GitHub Pages), try direct client-side fetch from Google Apps Script Web App
       if (!json) {
         try {
-          console.log(`[Transits UI] Direct fetch to GAS: ${urlToUse.trim()}`);
-          response = await fetch(urlToUse.trim());
+          console.log(`[Transits UI] Direct fetch to GAS: ${customSourceUrl}`);
+          response = await fetch(customSourceUrl);
           if (response.ok) {
             json = await response.json();
           } else {
@@ -241,7 +222,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
         }));
         setTransits(enrichedTransits);
         localStorage.setItem("planetary_transits_custom", JSON.stringify(enrichedTransits));
-        localStorage.setItem("planetary_transits_custom_url", urlToUse.trim());
+        localStorage.setItem("planetary_transits_custom_url", customSourceUrl);
         localStorage.removeItem("planetary_transits_factory_active");
         setIsFactoryDefault(false);
         setSyncStatus("synced");
@@ -301,92 +282,9 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
     }
   };
 
-  // Save / update custom data source URL
-  const handleSaveUrl = async (url: string) => {
-    const cleanUrl = url.trim();
-    if (!cleanUrl) {
-      setErrorMsg("Please enter a URL.");
-      setSyncStatus("error");
-      return;
-    }
-
-    // Google Apps Script Web App URLs must match: https://script.google.com/macros/s/.../exec
-    const isValidPattern = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec\/?(\?.*)?$/.test(cleanUrl);
-    if (!isValidPattern) {
-      setErrorMsg("Invalid URL. Data Source URL must be a valid Google Apps Script Web App link in the format: https://script.google.com/macros/s/.../exec");
-      setSyncStatus("error");
-      return;
-    }
-
-    setCustomSourceUrl(cleanUrl);
-    setInputUrl(cleanUrl);
-    localStorage.setItem("planetary_transits_custom_url", cleanUrl);
-    localStorage.removeItem("planetary_transits_factory_active");
-    setIsFactoryDefault(false);
-
-    try {
-      const docRef = doc(db, "settings", "planetary_transits");
-      await setDoc(docRef, { url: cleanUrl, updatedAt: new Date().toISOString() }, { merge: true });
-      console.log("Successfully saved transits URL to Firestore.");
-    } catch (err) {
-      console.error("Failed to save transits URL to Firestore:", err);
-    }
-
-    loadTransitData(cleanUrl);
-  };
-
-  // Reset to default source URL
-  const handleResetUrl = async () => {
-    const defaultUrl = "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec";
-    setCustomSourceUrl(defaultUrl);
-    setInputUrl(defaultUrl);
-    localStorage.setItem("planetary_transits_custom_url", defaultUrl);
-    localStorage.removeItem("planetary_transits_custom");
-    localStorage.removeItem("planetary_transits_factory_active");
-    localStorage.removeItem("planetary_transits_astro_ai_run");
-    setIsFactoryDefault(false);
-    setAstroAiRun(false);
-    setSyncStatus("idle");
-    setErrorMsg(null);
-
-    try {
-      const docRef = doc(db, "settings", "planetary_transits");
-      await setDoc(docRef, { url: defaultUrl, updatedAt: new Date().toISOString() }, { merge: true });
-      console.log("Successfully reset transits URL in Firestore.");
-    } catch (err) {
-      console.error("Failed to reset transits URL in Firestore:", err);
-    }
-
-    loadTransitData(defaultUrl);
-  };
-
-  // Run dynamic fetch on mount with Firestore check
+  // Run dynamic fetch on mount
   useEffect(() => {
-    const initUrlAndFetch = async () => {
-      let activeUrl = customSourceUrl;
-      try {
-        const docRef = doc(db, "settings", "planetary_transits");
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (data && data.url) {
-            activeUrl = data.url;
-            setCustomSourceUrl(data.url);
-            setInputUrl(data.url);
-            localStorage.setItem("planetary_transits_custom_url", data.url);
-          }
-        }
-      } catch (err) {
-        console.error("Error reading saved transits URL from Firestore on mount:", err);
-      }
-
-      if (activeUrl) {
-        loadTransitData(activeUrl);
-      } else {
-        setTransits([]);
-      }
-    };
-    initUrlAndFetch();
+    loadTransitData();
   }, []);
 
   const today = useMemo(() => new Date(), []);
@@ -492,29 +390,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
     }
   };
 
-  const handleResetDefault = async () => {
-    const defaultUrl = "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec";
-    setCustomSourceUrl(defaultUrl);
-    setInputUrl(defaultUrl);
-    localStorage.setItem("planetary_transits_custom_url", defaultUrl);
-    localStorage.removeItem("planetary_transits_custom");
-    localStorage.removeItem("planetary_transits_factory_active");
-    localStorage.removeItem("planetary_transits_astro_ai_run");
-    setAstroAiRun(false);
-    setSyncStatus("idle");
-    setErrorMsg(null);
-    setShowConfirmReset(false);
 
-    try {
-      const docRef = doc(db, "settings", "planetary_transits");
-      await setDoc(docRef, { url: defaultUrl, updatedAt: new Date().toISOString() }, { merge: true });
-      console.log("Successfully reset transits URL in Firestore.");
-    } catch (err) {
-      console.error("Failed to reset transits URL in Firestore:", err);
-    }
-
-    loadTransitData(defaultUrl);
-  };
 
   return (
     <div id="planetary_transits_section" className="bg-terminal-card border border-terminal-border rounded-xl p-6 space-y-6 shadow-2xl relative overflow-hidden text-gray-100">
@@ -551,274 +427,8 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
               <option key={yr} value={yr} className="bg-neutral-900">{yr}</option>
             ))}
           </select>
-
-          {isAdmin && (
-            <button
-              onClick={() => setShowConfig(!showConfig)}
-              className={`border p-1.5 rounded transition-all flex items-center space-x-1.5 cursor-pointer text-xs px-3 font-mono ${
-                showConfig 
-                  ? "bg-terminal-accent/15 border-terminal-accent text-terminal-accent" 
-                  : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-terminal-accent"
-              }`}
-              title="Configure Dynamic Spreadsheet Web App Connection"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span>SPREADSHEET SYNC</span>
-            </button>
-          )}
         </div>
       </div>
-
-      {/* Simplified Admin Configuration Area (URL Connection & Docs Only) */}
-      {isAdmin && showConfig && (
-        <div className="bg-black/60 border border-terminal-border rounded-xl p-5 space-y-4 font-mono animate-fadeIn relative">
-          <div className="border border-terminal-accent/20 bg-terminal-accent/[0.02] rounded-xl p-4 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
-              <div>
-                <h5 className="text-xs font-bold text-white uppercase flex items-center">
-                  <Database className="w-4 h-4 text-terminal-accent mr-1.5" />
-                  <span>Dynamic Spreadsheet Connection</span>
-                </h5>
-                <p className="text-[10px] text-gray-500">Connect your planetary transit aspects spreadsheet tab dynamically.</p>
-              </div>
-
-              <div className="flex items-center space-x-2 text-[10px]">
-                {syncStatus === "synced" && (
-                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-black">
-                    DYNAMIC ACTIVE ({transits.length} Events)
-                  </span>
-                )}
-                {syncStatus === "error" && (
-                  <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-black" title={errorMsg || ""}>
-                    SYNC ERROR (LOCAL FALLBACK)
-                  </span>
-                )}
-                {syncStatus === "loading" && (
-                  <span className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded animate-pulse font-black">
-                    LOADING...
-                  </span>
-                )}
-                {syncStatus === "idle" && (
-                  <span className="bg-gray-500/10 text-gray-400 border border-gray-500/20 px-2 py-0.5 rounded font-black">
-                    LOCAL DATABASE ACTIVE
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] text-gray-400 block uppercase font-bold">
-                Planetary Transits Data Source URL (Web App / Published CSV):
-              </label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={inputUrl}
-                  onChange={(e) => setInputUrl(e.target.value)}
-                  placeholder="https://script.google.com/macros/s/.../exec"
-                  className="flex-1 bg-black/80 border border-white/10 rounded px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-terminal-accent font-mono"
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSaveUrl(inputUrl)}
-                    disabled={isLoading}
-                    className="bg-terminal-accent text-black hover:bg-terminal-accent/90 px-4 py-2 rounded text-xs font-black transition-all cursor-pointer whitespace-nowrap"
-                  >
-                    SAVE & LINK
-                  </button>
-                  {customSourceUrl && customSourceUrl !== "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec" && (
-                    <button
-                      type="button"
-                      onClick={handleResetUrl}
-                      className="bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 px-4 py-2 rounded text-xs transition-all cursor-pointer whitespace-nowrap"
-                    >
-                      DISCONNECT
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-white/5 pt-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <h6 className="text-[11px] font-bold text-white uppercase flex items-center">
-                  <Link className="w-3.5 h-3.5 text-terminal-accent mr-1.5" />
-                  <span>HOW TO CONNECT YOUR OWN SPREADSHEET</span>
-                </h6>
-                {showConfirmReset ? (
-                  <div className="flex items-center space-x-2 bg-red-950/40 border border-red-500/30 px-2 py-0.5 rounded text-[9px] font-bold font-mono">
-                    <span className="text-red-400 font-bold uppercase">Reset Data?</span>
-                    <button
-                      type="button"
-                      onClick={handleResetDefault}
-                      className="bg-red-500 hover:bg-red-600 text-white px-1.5 py-0.5 rounded uppercase cursor-pointer"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmReset(false)}
-                      className="bg-white/10 hover:bg-white/20 text-gray-300 px-1.5 py-0.5 rounded uppercase cursor-pointer"
-                    >
-                      No
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmReset(true)}
-                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 px-2 py-0.5 rounded text-[9px] flex items-center space-x-1 cursor-pointer transition-all uppercase font-bold"
-                    title="Reset back to default planetary aspects and transits link and auto-save"
-                  >
-                    <RotateCcw className="w-2.5 h-2.5" />
-                    <span>Reset to Default Link</span>
-                  </button>
-                )}
-              </div>
-              
-              <div className="text-[10px] text-gray-400 space-y-1 leading-relaxed font-mono">
-                <p>
-                  Deploy a simple <strong className="text-white font-bold">Google Apps Script Web App</strong> linked to your transit sheet tab to enable real-time dashboard sync:
-                </p>
-                <ol className="list-decimal pl-4 space-y-1 text-gray-500">
-                  <li>Create a tab titled <strong className="text-gray-300">Planetary_Transits_2026-2030 🚫</strong> or similar in your Google Sheet.</li>
-                  <li>Go to <strong className="text-gray-300">Extensions &gt; Apps Script</strong>.</li>
-                  <li>Click <strong className="text-gray-300">COPY APPS SCRIPT CODE</strong> below, clear any existing code inside the editor, and paste.</li>
-                  <li>Click Save, and then click <strong className="text-gray-300">Deploy &gt; New deployment</strong> (Web app, Execute as: Me, Access: Anyone).</li>
-                  <li>Copy the resulting <strong className="text-white font-bold">Web App URL</strong> and paste it into the URL input above.</li>
-                </ol>
-              </div>
-
-              {/* COPY APPS SCRIPT TEMPLATE */}
-              <div className="bg-black/60 border border-white/5 rounded p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] text-gray-500 uppercase font-bold font-mono">Google Apps Script (Code.gs) for Transit Aspects</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`/**
- * Google Apps Script Web App
- * Serves Planetary Transits & Aspects data as JSON to your Astro Trading Web App
- */
-
-function doGet(e) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.getActive();
-    if (!ss) {
-      return createJsonResponse({ error: "No active spreadsheet found." });
-    }
-    
-    let sheet = ss.getSheetByName('Planetary_Transits_2026-2030 🚫') || 
-                ss.getSheetByName('Planetary_Transits_2026-2030') || 
-                ss.getSheetByName('Transits_Aspects') || 
-                ss.getSheets()[0];
-                
-    if (!sheet) {
-      return createJsonResponse({ error: "Could not find any spreadsheet tab." });
-    }
-    
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) {
-      return createJsonResponse({ transits: [] });
-    }
-    
-    const headers = sheet.getRange(1, 1, 1, Math.min(15, sheet.getLastColumn())).getValues()[0];
-    
-    let colYear = 1, colDate = 2, colTime = 3, colP1 = 4, colP1Sign = 5, colP2 = 6, colP2Sign = 7, colAspect = 8, colDegree = 9, colImpact = 10, colStrength = 11, colSectors = 12;
-    
-    for (let i = 0; i < headers.length; i++) {
-      const h = headers[i].toString().toLowerCase().trim();
-      if (h.includes("year")) colYear = i + 1;
-      else if (h.includes("date")) colDate = i + 1;
-      else if (h.includes("time")) colTime = i + 1;
-      else if (h.includes("planet 1") || h.includes("planet1") || h.includes("p1") && !h.includes("sign")) colP1 = i + 1;
-      else if (h.includes("p1 sign") || h.includes("planet1 sign") || h.includes("p1sign")) colP1Sign = i + 1;
-      else if (h.includes("planet 2") || h.includes("planet2") || h.includes("p2") && !h.includes("sign")) colP2 = i + 1;
-      else if (h.includes("p2 sign") || h.includes("planet2 sign") || h.includes("p2sign")) colP2Sign = i + 1;
-      else if (h.includes("aspect") || h.includes("type")) colAspect = i + 1;
-      else if (h.includes("degree") || h.includes("axis")) colDegree = i + 1;
-      else if (h.includes("impact") || h.includes("gann") || h.includes("interpretation")) colImpact = i + 1;
-      else if (h.includes("strength") || h.includes("priority")) colStrength = i + 1;
-      else if (h.includes("sectors") || h.includes("markets")) colSectors = i + 1;
-    }
-    
-    const maxCols = Math.max(colYear, colDate, colTime, colP1, colP1Sign, colP2, colP2Sign, colAspect, colDegree, colImpact, colStrength, colSectors);
-    const values = sheet.getRange(2, 1, lastRow - 1, maxCols).getDisplayValues();
-    const transits = [];
-    
-    for (let i = 0; i < values.length; i++) {
-      const row = values[i];
-      const year = row[colYear - 1] ? row[colYear - 1].trim() : "";
-      const rawDate = row[colDate - 1] ? row[colDate - 1].trim() : "";
-      const time = row[colTime - 1] ? row[colTime - 1].trim() : "";
-      const planet1 = row[colP1 - 1] ? row[colP1 - 1].trim() : "";
-      const planet1Sign = row[colP1Sign - 1] ? row[colP1Sign - 1].trim() : "";
-      const planet2 = row[colP2 - 1] ? row[colP2 - 1].trim() : "";
-      const planet2Sign = row[colP2Sign - 1] ? row[colP2Sign - 1].trim() : "";
-      const aspectType = row[colAspect - 1] ? row[colAspect - 1].trim() : "Opposition";
-      const degree = row[colDegree - 1] ? row[colDegree - 1].trim() : "0° 00'";
-      const marketImpact = row[colImpact - 1] ? row[colImpact - 1].trim() : "";
-      const strength = row[colStrength - 1] ? row[colStrength - 1].trim().toUpperCase() : "HIGH";
-      const sectorsRaw = row[colSectors - 1] ? row[colSectors - 1].trim() : "Global Markets";
-      
-      if (!rawDate || !planet1 || !planet2) continue;
-      
-      const sectorsList = sectorsRaw.split(",").map(s => s.trim()).filter(Boolean);
-      
-      transits.push({
-        id: "gs-" + (i + 2),
-        year: parseInt(year) || new Date(rawDate).getFullYear() || 2026,
-        date: rawDate,
-        time: time || "12:00 UTC",
-        planet1: planet1,
-        planet1Sign: planet1Sign,
-        planet2: planet2,
-        planet2Sign: planet2Sign,
-        aspectType: aspectType,
-        degree: degree,
-        marketImpact: marketImpact,
-        strength: (strength === "HIGH" || strength === "MEDIUM" || strength === "LOW") ? strength : "HIGH",
-        sectors: sectorsList.length > 0 ? sectorsList : ["Global Markets"]
-      });
-    }
-    
-    return createJsonResponse({ success: true, count: transits.length, transits: transits });
-  } catch (err) {
-    return createJsonResponse({ success: false, error: err.toString() });
-  }
-}
-
-function createJsonResponse(data) {
-  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
-}`);
-                      setCopiedCode(true);
-                      setTimeout(() => setCopiedCode(false), 2000);
-                    }}
-                    className="bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 px-2 py-1 rounded text-[10px] flex items-center space-x-1 cursor-pointer transition-all hover:text-terminal-accent hover:border-terminal-accent"
-                  >
-                    {copiedCode ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-400" />
-                        <span className="text-emerald-400 font-bold">COPIED APPS SCRIPT!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>COPY SCRIPT CODE</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <pre className="text-[9px] text-gray-500 overflow-x-auto max-h-[75px] p-2 bg-black/40 rounded font-mono select-all leading-relaxed">
-{`// Google Sheet tab columns expected:
-// Year | Date | Time | Planet 1 | P1 Sign | Planet 2 | P2 Sign | Aspect Type | Degree | Market Impact | Strength | Sectors`}
-                </pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Redesigned Dynamic Dual Sections: Last 2 Aspects & Upcoming 3 Aspects */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 font-mono">

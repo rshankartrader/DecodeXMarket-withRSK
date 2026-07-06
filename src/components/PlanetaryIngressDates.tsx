@@ -94,6 +94,7 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<"loading" | "synced" | "error" | "offline">("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isFactoryDefault, setIsFactoryDefault] = useState<boolean>(true);
 
   // System Date
   const today = useMemo(() => {
@@ -154,6 +155,7 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
       if (json && Array.isArray(json.events) && json.events.length > 0) {
         setIngressData(json.events);
         setSyncStatus("synced");
+        setIsFactoryDefault(false);
       } else {
         throw new Error("No ingress events found in response data");
       }
@@ -161,6 +163,10 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
       console.error("[Ingress UI] Error loading ingress data:", error);
       setErrorMsg(error.message || "Failed to load spreadsheet ingress transits.");
       setSyncStatus("error");
+      
+      // Fallback to static data on error (e.g. static hosters returning 404 for API routes)
+      setIngressData(STATIC_INGRESS_DATA);
+      setIsFactoryDefault(true);
     } finally {
       setIsLoading(false);
     }
@@ -321,43 +327,52 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
             PLANETARY INGRESS DATES
           </h3>
 
-          {isAdmin && (
-            <div className="flex items-center space-x-3 self-start sm:self-center font-mono">
-              {syncStatus === "synced" && (
-                <div className="flex items-center space-x-1.5 text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  <span>DYNAMIC GOOGLE SHEETS ACTIVE</span>
-                </div>
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-center font-mono">
+            {syncStatus === "synced" && (
+              <div className="flex items-center space-x-1.5 text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>DYNAMIC GOOGLE SHEETS ACTIVE</span>
+              </div>
+            )}
+            {(syncStatus === "error" || isFactoryDefault) && (
+              <div className="flex items-center space-x-1.5 text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full" title={errorMsg || "Fallback data active"}>
+                <AlertTriangle className="w-3 h-3 text-amber-400 animate-bounce" />
+                <span>STATIC FALLBACK ACTIVE</span>
+              </div>
+            )}
+            {syncStatus === "loading" && (
+              <div className="flex items-center space-x-1.5 text-[9px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full">
+                <Loader2 className="w-3 h-3 text-sky-400 animate-spin" />
+                <span>FETCHING LATEST SHEETS...</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => loadIngressData(customSourceUrl)}
+              disabled={isLoading}
+              className="flex items-center space-x-1.5 bg-terminal-accent/10 hover:bg-terminal-accent/20 border border-terminal-accent/30 hover:border-terminal-accent/50 text-terminal-accent text-xs font-mono font-bold px-3 py-1.5 rounded transition-all disabled:opacity-50 cursor-pointer"
+              title="Synchronize live planetary ingress dates from Google Sheets"
+            >
+              {isLoading ? (
+                <span className="w-3.5 h-3.5 border-2 border-terminal-accent border-t-transparent rounded-full animate-spin"></span>
+              ) : (
+                <Database className="w-3.5 h-3.5" />
               )}
-              {syncStatus === "error" && (
-                <div className="flex items-center space-x-1.5 text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full" title={errorMsg || "Fallback data active"}>
-                  <AlertTriangle className="w-3 h-3 text-amber-400 animate-bounce" />
-                  <span>STATIC FALLBACK ACTIVE</span>
-                </div>
-              )}
-              {syncStatus === "loading" && (
-                <div className="flex items-center space-x-1.5 text-[9px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full">
-                  <Loader2 className="w-3 h-3 text-sky-400 animate-spin" />
-                  <span>FETCHING LATEST SHEETS...</span>
-                </div>
-              )}
+              <span>{isLoading ? "SYNCING..." : "SYNC SPREADSHEET"}</span>
+            </button>
+
+            {isAdmin && (
               <button
-                onClick={() => loadIngressData(customSourceUrl)}
-                disabled={isLoading}
-                title="Refresh spreadsheet data"
-                className="bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 p-1 rounded hover:border-terminal-accent transition-all cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-gray-300 ${isLoading ? "animate-spin text-terminal-accent" : ""}`} />
-              </button>
-              <button
+                type="button"
                 onClick={() => setShowSettings(!showSettings)}
                 title="Configure Custom Google Sheet / Apps Script"
                 className={`border p-1 rounded transition-all cursor-pointer ${showSettings ? "bg-terminal-accent/15 border-terminal-accent text-terminal-accent" : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-terminal-accent"}`}
               >
                 <Settings className="w-3.5 h-3.5" />
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
         <p className="text-xs text-gray-500 font-mono mt-2">
           Monitor exactly when planets change zodiac signs (Ingress) in real-time. Connected to {isAdmin ? "user-defined" : "verified"} spreadsheet for complete, uncompromised astronomical tracking.
@@ -589,6 +604,38 @@ function createJsonResponse(data) {
 }`}
               </pre>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Static Fallback Warning Banner */}
+      {(syncStatus === "error" || isFactoryDefault) && (
+        <div className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4.5 font-mono text-xs text-gray-300 space-y-2.5 animate-fadeIn">
+          <div className="flex items-center space-x-2 text-amber-400 font-bold">
+            <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+            <span className="uppercase tracking-wider">Spreadsheet Sync Alert: Static Fallback Mode Engaged</span>
+          </div>
+          <p className="leading-relaxed">
+            Live Google Sheets synchronization downlink is currently offline or unreachable. This often occurs on static servers (like GitHub/ingress proxies) due to CORS policies or network routing constraints.
+            To keep your trading analytics fully operational, the system has automatically engaged <strong className="text-white">High-Fidelity Static Fallback Mode</strong>. High-probability 2026 ingress dates, planetary changes, and zodiac transition milestones have been loaded from pre-computed local telemetry.
+          </p>
+          {errorMsg && (
+            <div className="text-[10px] bg-black/40 border border-white/5 rounded px-2.5 py-1.5 text-gray-400 font-mono select-all overflow-x-auto whitespace-pre-wrap max-h-24">
+              Downlink Diagnostics: {errorMsg}
+            </div>
+          )}
+          <div className="flex items-center space-x-3 pt-1">
+            <button
+              type="button"
+              onClick={() => loadIngressData(customSourceUrl)}
+              disabled={isLoading}
+              className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 px-3 py-1 rounded text-[10px] uppercase font-bold tracking-wider cursor-pointer transition-all disabled:opacity-50"
+            >
+              {isLoading ? "RETRYING DOWNLINK..." : "RETRY SYNC"}
+            </button>
+            <span className="text-[10px] text-gray-500">
+              Downlink Status: <strong className="uppercase text-amber-500">{syncStatus}</strong>
+            </span>
           </div>
         </div>
       )}

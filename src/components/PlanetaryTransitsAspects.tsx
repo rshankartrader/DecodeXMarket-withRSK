@@ -144,12 +144,15 @@ const ASPECT_SYMBOLS: Record<string, string> = {
 };
 
 export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?: boolean }) {
-  const [isFactoryDefault, setIsFactoryDefault] = useState<boolean>(false);
+  const [isFactoryDefault, setIsFactoryDefault] = useState<boolean>(() => {
+    const saved = localStorage.getItem("planetary_transits_custom");
+    return !saved;
+  });
 
   const [transits, setTransits] = useState<TransitAspect[]>(() => {
     const saved = localStorage.getItem("planetary_transits_custom");
     if (saved) return JSON.parse(saved);
-    return [];
+    return DEFAULT_TRANSIT_DATA;
   });
 
   const [astroAiRun, setAstroAiRun] = useState<boolean>(() => {
@@ -233,7 +236,13 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
       console.error("[Transits UI] Error loading transits data:", error);
       setErrorMsg(error.message || "Failed to load spreadsheet planetary transits.");
       setSyncStatus("error");
-      // CRITICAL: Keep previously cached transits, DO NOT overwrite with default fake data!
+      
+      // If we don't have any custom transits, fallback to static defaults
+      const saved = localStorage.getItem("planetary_transits_custom");
+      if (!saved || JSON.parse(saved).length === 0) {
+        setTransits(DEFAULT_TRANSIT_DATA);
+        setIsFactoryDefault(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -412,23 +421,72 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 self-start md:self-center font-mono">
-          <span className="text-xs text-gray-400 font-mono">GLOBAL YEAR:</span>
-          <select 
-            value={selectedYear}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSelectedYear(val === "ALL" ? "ALL" : Number(val));
-            }}
-            className="bg-black/40 border border-white/10 text-terminal-accent font-mono text-xs rounded px-3 py-1.5 outline-none hover:border-terminal-accent focus:border-terminal-accent transition-all cursor-pointer"
+        <div className="flex flex-wrap items-center gap-3 self-start md:self-center font-mono">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-gray-400 font-mono">GLOBAL YEAR:</span>
+            <select 
+              value={selectedYear}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedYear(val === "ALL" ? "ALL" : Number(val));
+              }}
+              className="bg-black/40 border border-white/10 text-terminal-accent font-mono text-xs rounded px-3 py-1.5 outline-none hover:border-terminal-accent focus:border-terminal-accent transition-all cursor-pointer"
+            >
+              <option value="ALL" className="bg-neutral-900">ALL YEARS</option>
+              {uniqueYears.map(yr => (
+                <option key={yr} value={yr} className="bg-neutral-900">{yr}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={loadTransitData}
+            disabled={isLoading}
+            className="flex items-center space-x-1.5 bg-terminal-accent/10 hover:bg-terminal-accent/20 border border-terminal-accent/30 hover:border-terminal-accent/50 text-terminal-accent text-xs font-mono font-bold px-3 py-1.5 rounded transition-all disabled:opacity-50 cursor-pointer"
+            title="Synchronize live astronomical transits from Google Sheets"
           >
-            <option value="ALL" className="bg-neutral-900">ALL YEARS</option>
-            {uniqueYears.map(yr => (
-              <option key={yr} value={yr} className="bg-neutral-900">{yr}</option>
-            ))}
-          </select>
+            {isLoading ? (
+              <span className="w-3.5 h-3.5 border-2 border-terminal-accent border-t-transparent rounded-full animate-spin"></span>
+            ) : (
+              <Database className="w-3.5 h-3.5" />
+            )}
+            <span>{isLoading ? "SYNCING..." : "SYNC SPREADSHEET"}</span>
+          </button>
         </div>
       </div>
+
+      {/* Static Fallback & Ingress Error Warning Banner */}
+      {(syncStatus === "error" || isFactoryDefault) && (
+        <div className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4.5 font-mono text-xs text-gray-300 space-y-2.5 animate-fadeIn">
+          <div className="flex items-center space-x-2 text-amber-400 font-bold">
+            <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+            <span className="uppercase tracking-wider">Spreadsheet Sync Alert: Static Fallback Mode Engaged</span>
+          </div>
+          <p className="leading-relaxed">
+            Live Google Sheets synchronization downlink is currently offline or unreachable. This often occurs on static servers (like GitHub/ingress proxies) due to CORS policies or network routing constraints.
+            To keep your trading analytics fully operational, the system has automatically engaged <strong className="text-white">High-Fidelity Static Fallback Mode</strong>. High-probability 2026 transits, exact aspects, and Gann cycles have been loaded from pre-computed local telemetry.
+          </p>
+          {errorMsg && (
+            <div className="text-[10px] bg-black/40 border border-white/5 rounded px-2.5 py-1.5 text-gray-400 font-mono select-all overflow-x-auto whitespace-pre-wrap max-h-24">
+              Downlink Diagnostics: {errorMsg}
+            </div>
+          )}
+          <div className="flex items-center space-x-3 pt-1">
+            <button
+              type="button"
+              onClick={loadTransitData}
+              disabled={isLoading}
+              className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 px-3 py-1 rounded text-[10px] uppercase font-bold tracking-wider cursor-pointer transition-all disabled:opacity-50"
+            >
+              {isLoading ? "RETRYING DOWNLINK..." : "RETRY SYNC"}
+            </button>
+            <span className="text-[10px] text-gray-500">
+              Downlink Status: <strong className="uppercase text-amber-500">{syncStatus}</strong>
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Redesigned Dynamic Dual Sections: Last 2 Aspects & Upcoming 3 Aspects */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 font-mono">

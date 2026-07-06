@@ -189,11 +189,19 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
 
       const apiEndpoint = `/api/planetary-transits?url=${encodeURIComponent(customSourceUrl)}`;
       let response;
-      let json;
+      let json: any = null;
+
+      // 1. Try server-side API proxy first
       try {
         response = await fetch(apiEndpoint);
         if (response.ok) {
-          json = await response.json();
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            json = await response.json();
+            console.log("[Transits UI] Loaded from API proxy:", json);
+          } else {
+            console.warn("[Transits UI] Server-side API returned non-JSON. Probably static hosting SPA redirect. Trying direct fallback...");
+          }
         } else {
           console.warn(`[Transits UI] Server-side API returned status ${response.status}. Trying direct fetch fallback...`);
         }
@@ -201,18 +209,25 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
         console.warn("[Transits UI] Server-side API endpoint failed, trying direct fetch to GAS:", err);
       }
 
-      // If server-side API didn't work (e.g. running on a static host like Vercel/GitHub Pages), try direct client-side fetch from Google Apps Script Web App
+      // 2. Fallback: Try direct client-side fetch from Google Apps Script Web App
       if (!json) {
         try {
           console.log(`[Transits UI] Direct fetch to GAS: ${customSourceUrl}`);
           response = await fetch(customSourceUrl);
           if (response.ok) {
-            json = await response.json();
+            const rawData = await response.json();
+            if (rawData) {
+              const transits = Array.isArray(rawData) ? rawData : (Array.isArray(rawData.transits) ? rawData.transits : []);
+              if (transits.length > 0) {
+                json = { transits };
+                console.log("[Transits UI] Direct GAS fetch succeeded. Transits count:", transits.length);
+              }
+            }
           } else {
-            throw new Error(`Direct fetch to GAS returned status ${response.status}`);
+            console.warn(`[Transits UI] Direct GAS returned status ${response.status}`);
           }
         } catch (directErr: any) {
-          throw new Error(`Celestial downlink offline: Both API Proxy and Direct Google Apps Script fetch failed. Please check the Web App configuration.`);
+          console.warn("[Transits UI] Direct Google Apps Script fetch failed (possibly CORS). Using local pre-computed transits data.", directErr);
         }
       }
 
@@ -230,18 +245,21 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
         setIsFactoryDefault(false);
         setSyncStatus("synced");
       } else {
-        throw new Error("No transits or aspect events found in response data");
+        throw new Error("Could not retrieve live planetary transit aspects from Google Sheets. Using high-probability local cycle data instead.");
       }
     } catch (error: any) {
-      console.error("[Transits UI] Error loading transits data:", error);
+      console.warn("[Transits UI] Error loading transits data:", error);
       setErrorMsg(error.message || "Failed to load spreadsheet planetary transits.");
       setSyncStatus("error");
       
-      // If we don't have any custom transits, fallback to static defaults
+      // Fallback to static defaults so the UI is never empty
       const saved = localStorage.getItem("planetary_transits_custom");
       if (!saved || JSON.parse(saved).length === 0) {
         setTransits(DEFAULT_TRANSIT_DATA);
         setIsFactoryDefault(true);
+      } else {
+        setTransits(JSON.parse(saved));
+        setIsFactoryDefault(false);
       }
     } finally {
       setIsLoading(false);

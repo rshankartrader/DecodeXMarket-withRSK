@@ -76,6 +76,155 @@ export const STATIC_INGRESS_DATA: IngressEvent[] = [
   { planet: "Sun", symbol: "☉", sign: "Capricorn", signSymbol: "♑", date: "2030-12-21", time: "20:10 UTC", marketImpact: "Winter Solstice 2030: Sovereign debt realignments and year-end bookkeeping." }
 ];
 
+// Robust Client-side CSV Parser for Planetary Ingress spreadsheet
+export const parseCSVTextIngress = (csvText: string): IngressEvent[] => {
+  const events: IngressEvent[] = [];
+  if (!csvText || typeof csvText !== "string") return events;
+
+  const lines = csvText.split(/\r?\n/);
+  
+  const parseCSVLine = (line: string) => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  let yearIdx = 0;
+  let dateIdx = 1;
+  let timeIdx = 2;
+  let planetIdx = 3;
+  let signIdx = 4;
+  let impactIdx = -1;
+
+  let startIndex = 0;
+  if (lines.length > 0) {
+    const firstLineCols = parseCSVLine(lines[0]);
+    const isHeader = firstLineCols.some(col => 
+      col.toLowerCase().includes("year") || 
+      col.toLowerCase().includes("date") || 
+      col.toLowerCase().includes("planet") ||
+      col.toLowerCase().includes("sign")
+    );
+    if (isHeader) {
+      startIndex = 1;
+      firstLineCols.forEach((col, idx) => {
+        const lower = col.toLowerCase();
+        if (lower.includes("year")) yearIdx = idx;
+        else if (lower.includes("date")) dateIdx = idx;
+        else if (lower.includes("time")) timeIdx = idx;
+        else if (lower.includes("planet")) planetIdx = idx;
+        else if (lower.includes("sign")) signIdx = idx;
+        else if (lower.includes("impact") || lower.includes("market") || lower.includes("description") || lower.includes("gann")) impactIdx = idx;
+      });
+    }
+  }
+
+  const normalizeDate = (rawDate: string, year?: string): string => {
+    let normalizedDate = rawDate.trim();
+    if (normalizedDate.includes("-") || normalizedDate.includes("/")) {
+      const separator = normalizedDate.includes("-") ? "-" : "/";
+      const parts = normalizedDate.split(separator);
+      if (parts.length === 3) {
+        if (parts[2].length === 4 || parts[2].length === 2) {
+          const d = parts[0].padStart(2, "0");
+          const m = parts[1].padStart(2, "0");
+          let y = parts[2];
+          if (y.length === 2) y = "20" + y;
+          normalizedDate = `${y}-${m}-${d}`;
+        } else if (parts[0].length === 4) {
+          const y = parts[0];
+          const m = parts[1].padStart(2, "0");
+          const d = parts[2].padStart(2, "0");
+          normalizedDate = `${y}-${m}-${d}`;
+        }
+      }
+      return normalizedDate;
+    }
+
+    const months: Record<string, string> = {
+      "jan": "01", "january": "01", "feb": "02", "february": "02", "mar": "03", "march": "03",
+      "apr": "04", "april": "04", "may": "05", "jun": "06", "june": "06", "jul": "07", "july": "07",
+      "aug": "08", "august": "08", "sep": "09", "september": "09", "oct": "10", "october": "10",
+      "nov": "11", "november": "11", "dec": "12", "december": "12"
+    };
+    const monthMatch = normalizedDate.match(/([a-zA-Z]+)/);
+    const dayMatch = normalizedDate.match(/(\d+)/);
+    if (monthMatch && dayMatch) {
+      const mName = monthMatch[1].toLowerCase();
+      const mNum = months[mName];
+      const dNum = dayMatch[1].padStart(2, "0");
+      if (mNum && dNum) {
+        return `${year || "2026"}-${mNum}-${dNum}`;
+      }
+    }
+    return normalizedDate;
+  };
+
+  const PLANET_SYMBOLS: Record<string, string> = {
+    "sun": "☉", "moon": "☽", "mercury": "☿", "venus": "♀", "mars": "♂",
+    "jupiter": "♃", "saturn": "♄", "uranus": "♅", "neptune": "♆", "pluto": "♇",
+    "north node": "☊", "south node": "☋", "chiron": "⚷", "rahu": "☊", "ketu": "☋"
+  };
+
+  const SIGN_SYMBOLS: Record<string, string> = {
+    "aries": "♈", "taurus": "♉", "gemini": "♊", "cancer": "♋", "leo": "♌", "virgo": "♍",
+    "libra": "♎", "scorpio": "♏", "sagittarius": "♐", "capricorn": "♑", "aquarius": "♒", "pisces": "♓"
+  };
+
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const cols = parseCSVLine(line);
+    if (cols.length < 4) continue;
+
+    let rawYear = cols[yearIdx] ? cols[yearIdx].trim() : "";
+    let rawDate = cols[dateIdx] ? cols[dateIdx].trim() : "";
+    let time = cols[timeIdx] ? cols[timeIdx].trim() : "";
+    let planet = cols[planetIdx] ? cols[planetIdx].trim() : "";
+    let sign = cols[signIdx] ? cols[signIdx].trim() : "";
+    let customImpact = impactIdx !== -1 && cols[impactIdx] ? cols[impactIdx].trim() : "";
+
+    if (sign.toLowerCase() === "enters" && cols.length > 5) {
+      sign = cols[5].trim();
+      customImpact = cols.length >= 7 ? cols[6].trim() : "";
+    }
+
+    const cleanPlanet = planet.replace(/[\"']/g, "").trim();
+    const cleanSign = sign.replace(/[\"']/g, "").trim();
+    if (!cleanPlanet || !cleanSign) continue;
+
+    const pSymbol = PLANET_SYMBOLS[cleanPlanet.toLowerCase()] || "☿";
+    const sSymbol = SIGN_SYMBOLS[cleanSign.toLowerCase()] || "♈";
+    const normalizedDate = normalizeDate(rawDate, rawYear);
+
+    events.push({
+      planet: cleanPlanet,
+      symbol: pSymbol,
+      sign: cleanSign,
+      signSymbol: sSymbol,
+      date: normalizedDate,
+      time,
+      marketImpact: customImpact || `${cleanPlanet} entering ${cleanSign} zodiac transit.`
+    });
+  }
+
+  events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return events;
+};
+
 export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: boolean } = {}) {
   const [ingressData, setIngressData] = useState<IngressEvent[]>(STATIC_INGRESS_DATA);
   const [selectedPlanet, setSelectedPlanet] = useState<string>("ALL");
@@ -111,7 +260,7 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
     return today.toISOString().split("T")[0];
   }, [today]);
 
-  // Fetch ingress data from server proxy
+  // Fetch ingress data from server proxy with multiple client-side fallbacks
   const loadIngressData = async (targetUrl?: string) => {
     try {
       setIsLoading(true);
@@ -125,30 +274,67 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
 
       console.log(`[Ingress UI] Loading data from endpoint: ${apiEndpoint}`);
       let response;
-      let json;
+      let json: any = null;
+
+      // 1. Try server-side API proxy first
       try {
         response = await fetch(apiEndpoint);
         if (response.ok) {
-          json = await response.json();
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            json = await response.json();
+            console.log("[Ingress UI] Loaded from API proxy:", json);
+          } else {
+            console.warn("[Ingress UI] API proxy returned non-JSON response. Probably static hosting SPA redirect. Trying direct fallbacks...");
+          }
         } else {
-          console.warn(`[Ingress UI] Server-side API returned status ${response.status}. Trying direct fetch fallback...`);
+          console.warn(`[Ingress UI] API proxy returned status ${response.status}. Trying direct fallbacks...`);
         }
       } catch (err) {
-        console.warn("[Ingress UI] Server API fetch failed, trying direct Google Apps Script Web App fetch:", err);
+        console.warn("[Ingress UI] API proxy fetch failed. Trying direct fallbacks...", err);
       }
 
-      // Try direct fetch if proxy failed and a custom URL is provided
-      if (!json && urlToUse.trim()) {
+      // 2. Fallback: Try direct client-side fetch from Google Apps Script Web App
+      if (!json || !Array.isArray(json.events) || json.events.length === 0) {
+        const gasUrl = urlToUse.trim() || "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec";
         try {
-          console.log(`[Ingress UI] Direct fetch to GAS: ${urlToUse.trim()}`);
-          response = await fetch(urlToUse.trim());
+          console.log(`[Ingress UI] Direct fetch to GAS: ${gasUrl}`);
+          response = await fetch(gasUrl);
           if (response.ok) {
-            json = await response.json();
+            const rawData = await response.json();
+            if (rawData) {
+              const events = Array.isArray(rawData) ? rawData : (Array.isArray(rawData.events) ? rawData.events : []);
+              if (events.length > 0) {
+                json = { events };
+                console.log("[Ingress UI] Direct GAS fetch succeeded. Events count:", events.length);
+              }
+            }
           } else {
-            throw new Error(`Direct fetch to GAS returned status ${response.status}`);
+            console.warn(`[Ingress UI] Direct GAS returned status ${response.status}. Trying CSV direct fetch...`);
           }
-        } catch (directErr: any) {
-          throw new Error(`Celestial downlink offline: Both API Proxy and Direct Google Apps Script fetch failed. Please check the Web App configuration.`);
+        } catch (directErr) {
+          console.warn("[Ingress UI] Direct GAS fetch failed (likely CORS or un-published script). Trying CSV direct fetch...", directErr);
+        }
+      }
+
+      // 3. Fallback: Try direct client-side fetch from the Google Sheets published CSV URL
+      if (!json || !Array.isArray(json.events) || json.events.length === 0) {
+        const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWqA53wQqhu2nNXSDcxeoA7gErbS0gTpPC1UjLr0ZRbIoPXmnAETdMgiPmGYuTLbmioMnxQVr6WEab/pub?gid=1478838111&single=true&output=csv";
+        try {
+          console.log(`[Ingress UI] Direct fetch to Google Sheet CSV: ${csvUrl}`);
+          response = await fetch(csvUrl);
+          if (response.ok) {
+            const csvText = await response.text();
+            const events = parseCSVTextIngress(csvText);
+            if (events.length > 0) {
+              json = { events };
+              console.log("[Ingress UI] Direct Google Sheet CSV fetch & parse succeeded. Events count:", events.length);
+            }
+          } else {
+            console.warn(`[Ingress UI] Direct Google Sheet CSV fetch returned status ${response.status}`);
+          }
+        } catch (csvErr: any) {
+          console.error("[Ingress UI] Direct Google Sheet CSV fetch failed:", csvErr);
         }
       }
 
@@ -157,14 +343,14 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
         setSyncStatus("synced");
         setIsFactoryDefault(false);
       } else {
-        throw new Error("No ingress events found in response data");
+        throw new Error("Could not retrieve live planetary ingress dates from any Google Sheets downlink. Confirm Google Apps Script deployment is correct or sheet publication is active.");
       }
     } catch (error: any) {
       console.error("[Ingress UI] Error loading ingress data:", error);
       setErrorMsg(error.message || "Failed to load spreadsheet ingress transits.");
       setSyncStatus("error");
       
-      // Fallback to static data on error (e.g. static hosters returning 404 for API routes)
+      // Fallback to static data on error so UI is never empty
       setIngressData(STATIC_INGRESS_DATA);
       setIsFactoryDefault(true);
     } finally {

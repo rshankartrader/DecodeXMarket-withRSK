@@ -1220,7 +1220,7 @@ You MUST:
 Make sure your output is valid JSON and only returns JSON. Do not include introductory text outside the JSON.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -1320,7 +1320,7 @@ ${JSON.stringify(transitSummaries, null, 2)}
 Return ONLY a valid JSON array matching the structure described. Do not wrap in markdown or include any introductory text.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",

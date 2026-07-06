@@ -174,7 +174,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
 
   // Dynamic Google Sheets sync states
   const [customSourceUrl, setCustomSourceUrl] = useState<string>(() => {
-    return localStorage.getItem("planetary_transits_custom_url") || "https://script.google.com/macros/s/AKfycbxEcG9hykxB_N3aSi1Q8Qlipn3XtuTcNoCs62_RM9cIsIU357K9TygKIW3hkQKmNkmTVA/exec";
+    return localStorage.getItem("planetary_transits_custom_url") || "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec";
   });
   const [inputUrl, setInputUrl] = useState<string>(customSourceUrl);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -204,13 +204,33 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
       setErrorMsg(null);
 
       const apiEndpoint = `/api/planetary-transits?url=${encodeURIComponent(urlToUse.trim())}`;
-      const response = await fetch(apiEndpoint);
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || `Server returned status ${response.status}`);
+      let response;
+      let json;
+      try {
+        response = await fetch(apiEndpoint);
+        if (response.ok) {
+          json = await response.json();
+        } else {
+          console.warn(`[Transits UI] Server-side API returned status ${response.status}. Trying direct fetch fallback...`);
+        }
+      } catch (err) {
+        console.warn("[Transits UI] Server-side API endpoint failed, trying direct fetch to GAS:", err);
       }
 
-      const json = await response.json();
+      // If server-side API didn't work (e.g. running on a static host like Vercel/GitHub Pages), try direct client-side fetch from Google Apps Script Web App
+      if (!json) {
+        try {
+          console.log(`[Transits UI] Direct fetch to GAS: ${urlToUse.trim()}`);
+          response = await fetch(urlToUse.trim());
+          if (response.ok) {
+            json = await response.json();
+          } else {
+            throw new Error(`Direct fetch to GAS returned status ${response.status}`);
+          }
+        } catch (directErr: any) {
+          throw new Error(`Celestial downlink offline: Both API Proxy and Direct Google Apps Script fetch failed. Please check the Web App configuration.`);
+        }
+      }
 
       if (json && Array.isArray(json.transits) && json.transits.length > 0) {
         const enrichedTransits = json.transits.map((t: any) => ({
@@ -317,7 +337,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
 
   // Reset to default source URL
   const handleResetUrl = async () => {
-    const defaultUrl = "https://script.google.com/macros/s/AKfycbxEcG9hykxB_N3aSi1Q8Qlipn3XtuTcNoCs62_RM9cIsIU357K9TygKIW3hkQKmNkmTVA/exec";
+    const defaultUrl = "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec";
     setCustomSourceUrl(defaultUrl);
     setInputUrl(defaultUrl);
     localStorage.setItem("planetary_transits_custom_url", defaultUrl);
@@ -473,7 +493,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
   };
 
   const handleResetDefault = async () => {
-    const defaultUrl = "https://script.google.com/macros/s/AKfycbxEcG9hykxB_N3aSi1Q8Qlipn3XtuTcNoCs62_RM9cIsIU357K9TygKIW3hkQKmNkmTVA/exec";
+    const defaultUrl = "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec";
     setCustomSourceUrl(defaultUrl);
     setInputUrl(defaultUrl);
     localStorage.setItem("planetary_transits_custom_url", defaultUrl);
@@ -607,7 +627,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
                   >
                     SAVE & LINK
                   </button>
-                  {customSourceUrl && customSourceUrl !== "https://script.google.com/macros/s/AKfycbxEcG9hykxB_N3aSi1Q8Qlipn3XtuTcNoCs62_RM9cIsIU357K9TygKIW3hkQKmNkmTVA/exec" && (
+                  {customSourceUrl && customSourceUrl !== "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec" && (
                     <button
                       type="button"
                       onClick={handleResetUrl}

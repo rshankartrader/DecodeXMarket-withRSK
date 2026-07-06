@@ -123,12 +123,34 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
         : "/api/planetary-ingress";
 
       console.log(`[Ingress UI] Loading data from endpoint: ${apiEndpoint}`);
-      const response = await fetch(apiEndpoint);
-      if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`);
+      let response;
+      let json;
+      try {
+        response = await fetch(apiEndpoint);
+        if (response.ok) {
+          json = await response.json();
+        } else {
+          console.warn(`[Ingress UI] Server-side API returned status ${response.status}. Trying direct fetch fallback...`);
+        }
+      } catch (err) {
+        console.warn("[Ingress UI] Server API fetch failed, trying direct Google Apps Script Web App fetch:", err);
       }
 
-      const json = await response.json();
+      // Try direct fetch if proxy failed and a custom URL is provided
+      if (!json && urlToUse.trim()) {
+        try {
+          console.log(`[Ingress UI] Direct fetch to GAS: ${urlToUse.trim()}`);
+          response = await fetch(urlToUse.trim());
+          if (response.ok) {
+            json = await response.json();
+          } else {
+            throw new Error(`Direct fetch to GAS returned status ${response.status}`);
+          }
+        } catch (directErr: any) {
+          throw new Error(`Celestial downlink offline: Both API Proxy and Direct Google Apps Script fetch failed. Please check the Web App configuration.`);
+        }
+      }
+
       if (json && Array.isArray(json.events) && json.events.length > 0) {
         setIngressData(json.events);
         setSyncStatus("synced");

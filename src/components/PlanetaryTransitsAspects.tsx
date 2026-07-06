@@ -143,6 +143,181 @@ const ASPECT_SYMBOLS: Record<string, string> = {
   "Opposition": "☍", "Conjunction": "☌", "Square": "□", "Trine": "△", "Sextile": "✶", "Quincunx": "⚻"
 };
 
+// Robust Client-side CSV Parser for Planetary Transits & Aspects spreadsheet
+export const parseCSVTextTransits = (csvText: string): TransitAspect[] => {
+  const transits: TransitAspect[] = [];
+  if (!csvText || typeof csvText !== "string") return transits;
+
+  const lines = csvText.split(/\r?\n/);
+  
+  const parseCSVLine = (line: string) => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const planetSymbolsLower: Record<string, string> = {
+    "sun": "☉", "moon": "☽", "mercury": "☿", "venus": "♀", "mars": "♂",
+    "jupiter": "♃", "saturn": "♄", "uranus": "♅", "neptune": "♆", "pluto": "♇",
+    "north node": "☊", "south node": "☋", "chiron": "⚷"
+  };
+
+  const aspectSymbolsLower: Record<string, string> = {
+    "opposition": "☍", "conjunction": "☌", "sextile": "⚹", "square": "□", "trine": "△", "quincunx": "⚻"
+  };
+
+  const normalizeDate = (rawDate: string, year?: string): string => {
+    let normalizedDate = rawDate.trim();
+    if (normalizedDate.includes("-") || normalizedDate.includes("/")) {
+      const separator = normalizedDate.includes("-") ? "-" : "/";
+      const parts = normalizedDate.split(separator);
+      if (parts.length === 3) {
+        if (parts[2].length === 4 || parts[2].length === 2) {
+          const d = parts[0].padStart(2, "0");
+          const m = parts[1].padStart(2, "0");
+          let y = parts[2];
+          if (y.length === 2) y = "20" + y;
+          normalizedDate = `${y}-${m}-${d}`;
+        } else if (parts[0].length === 4) {
+          const y = parts[0];
+          const m = parts[1].padStart(2, "0");
+          const d = parts[2].padStart(2, "0");
+          normalizedDate = `${y}-${m}-${d}`;
+        }
+      }
+      return normalizedDate;
+    }
+
+    const months: Record<string, string> = {
+      "jan": "01", "january": "01", "feb": "02", "february": "02", "mar": "03", "march": "03",
+      "apr": "04", "april": "04", "may": "05", "jun": "06", "june": "06", "jul": "07", "july": "07",
+      "aug": "08", "august": "08", "sep": "09", "september": "09", "oct": "10", "october": "10",
+      "nov": "11", "november": "11", "dec": "12", "december": "12"
+    };
+    const monthMatch = normalizedDate.match(/([a-zA-Z]+)/);
+    const dayMatch = normalizedDate.match(/(\d+)/);
+    if (monthMatch && dayMatch) {
+      const mName = monthMatch[1].toLowerCase();
+      const mNum = months[mName];
+      const dNum = dayMatch[1].padStart(2, "0");
+      if (mNum && dNum) {
+        return `${year || "2026"}-${mNum}-${dNum}`;
+      }
+    }
+    return normalizedDate;
+  };
+
+  let yearIdx = 0;
+  let dateIdx = 1;
+  let timeIdx = 2;
+  let p1Idx = 3;
+  let p1SignIdx = 4;
+  let p2Idx = 5;
+  let p2SignIdx = 6;
+  let aspectIdx = 7;
+  let degreeIdx = 8;
+  let impactIdx = 9;
+  let strengthIdx = 10;
+  let sectorsIdx = 11;
+
+  let startIndex = 0;
+  if (lines.length > 0) {
+    const firstLineCols = parseCSVLine(lines[0]);
+    const isHeader = firstLineCols.some(col => 
+      col.toLowerCase().includes("planet") || 
+      col.toLowerCase().includes("date") || 
+      col.toLowerCase().includes("year") ||
+      col.toLowerCase().includes("aspect")
+    );
+    if (isHeader) {
+      startIndex = 1;
+      firstLineCols.forEach((col, idx) => {
+        const lower = col.toLowerCase();
+        if (lower.includes("year")) yearIdx = idx;
+        else if (lower.includes("date")) dateIdx = idx;
+        else if (lower.includes("time")) timeIdx = idx;
+        else if ((lower.includes("planet 1") || lower.includes("planet1") || lower.includes("p1")) && !lower.includes("sign")) p1Idx = idx;
+        else if (lower.includes("p1 sign") || lower.includes("planet1 sign") || lower.includes("p1sign")) p1SignIdx = idx;
+        else if ((lower.includes("planet 2") || lower.includes("planet2") || lower.includes("p2")) && !lower.includes("sign")) p2Idx = idx;
+        else if (lower.includes("p2 sign") || lower.includes("planet2 sign") || lower.includes("p2sign")) p2SignIdx = idx;
+        else if (lower.includes("aspect") || lower.includes("type")) aspectIdx = idx;
+        else if (lower.includes("degree") || lower.includes("axis")) degreeIdx = idx;
+        else if (lower.includes("impact") || lower.includes("interpretation") || lower.includes("gann")) impactIdx = idx;
+        else if (lower.includes("strength") || lower.includes("priority")) strengthIdx = idx;
+        else if (lower.includes("sectors") || lower.includes("markets")) sectorsIdx = idx;
+      });
+    }
+  }
+
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const cols = parseCSVLine(line);
+    if (cols.length < 4) continue;
+
+    const rawYear = cols[yearIdx] ? cols[yearIdx].trim() : "";
+    const rawDate = cols[dateIdx] ? cols[dateIdx].trim() : "";
+    const time = cols[timeIdx] ? cols[timeIdx].trim() : "";
+    const planet1 = cols[p1Idx] ? cols[p1Idx].trim() : "";
+    const planet1Sign = cols[p1SignIdx] ? cols[p1SignIdx].trim() : "";
+    const planet2 = cols[p2Idx] ? cols[p2Idx].trim() : "";
+    const planet2Sign = cols[p2SignIdx] ? cols[p2SignIdx].trim() : "";
+    const aspectType = cols[aspectIdx] ? cols[aspectIdx].trim() : "Opposition";
+    const degree = cols[degreeIdx] ? cols[degreeIdx].trim() : "0° 00'";
+    const marketImpact = cols[impactIdx] ? cols[impactIdx].trim() : "";
+    const strengthStr = cols[strengthIdx] ? cols[strengthIdx].trim().toUpperCase() : "HIGH";
+    const sectorsRaw = cols[sectorsIdx] ? cols[sectorsIdx].trim() : "Global Markets";
+
+    if (!planet1 || !planet2 || !rawDate) continue;
+
+    const p1Key = planet1.toLowerCase();
+    const p2Key = planet2.toLowerCase();
+    const aspectKey = aspectType.toLowerCase();
+
+    const p1Symbol = planetSymbolsLower[p1Key] || "☉";
+    const p2Symbol = planetSymbolsLower[p2Key] || "♂";
+    const aspectSymbol = aspectSymbolsLower[aspectKey] || "☍";
+    const normalizedDate = normalizeDate(rawDate, rawYear);
+
+    const sectorsList = sectorsRaw.split(",").map(s => s.trim()).filter(Boolean);
+
+    transits.push({
+      id: `transit-csv-${i}-${Date.now()}`,
+      year: parseInt(rawYear) || new Date(normalizedDate).getUTCFullYear() || 2026,
+      date: normalizedDate,
+      time: time || "12:00 UTC",
+      planet1,
+      planet1Symbol: p1Symbol,
+      planet1Sign: planet1Sign || "Aries",
+      planet2,
+      planet2Symbol: p2Symbol,
+      planet2Sign: planet2Sign || "Libra",
+      aspectType,
+      aspectSymbol,
+      degree,
+      marketImpact: marketImpact || `${planet1} ${aspectType} ${planet2} celestial configuration.`,
+      strength: (strengthStr === "HIGH" || strengthStr === "MEDIUM" || strengthStr === "LOW") ? (strengthStr as "HIGH" | "MEDIUM" | "LOW") : "HIGH",
+      sectors: sectorsList.length > 0 ? sectorsList : ["Global Markets"]
+    });
+  }
+
+  transits.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return transits;
+};
+
 export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?: boolean }) {
   const [isFactoryDefault, setIsFactoryDefault] = useState<boolean>(() => {
     const saved = localStorage.getItem("planetary_transits_custom");
@@ -175,19 +350,23 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
   const [timeFilter, setTimeFilter] = useState<"ALL" | "UPCOMING" | "PAST">("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Permanently saved Google Sheets Web App URL for Transit Aspects
-  const customSourceUrl = "https://script.google.com/macros/s/AKfycbxEcG9hykxB_N3aSi1Q8Qlipn3XtuTcNoCs62_RM9cIsIU357K9TygKIW3hkQKmNkmTVA/exec";
+  // Stored source URL configuration
+  const [customSourceUrl, setCustomSourceUrl] = useState<string>(() => localStorage.getItem("planetary_transits_custom_url") || "");
+  const [inputUrl, setInputUrl] = useState<string>(() => localStorage.getItem("planetary_transits_custom_url") || "");
+  const [showSettings, setShowSettings] = useState<boolean>(false);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<"loading" | "synced" | "error" | "idle">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const loadTransitData = async () => {
+  const loadTransitData = async (targetUrl?: string) => {
     try {
       setIsLoading(true);
       setSyncStatus("loading");
       setErrorMsg(null);
 
-      const apiEndpoint = `/api/planetary-transits?url=${encodeURIComponent(customSourceUrl)}`;
+      const urlToUse = targetUrl !== undefined ? targetUrl : customSourceUrl;
+      const apiEndpoint = `/api/planetary-transits?url=${encodeURIComponent(urlToUse || "https://script.google.com/macros/s/AKfycbxEcG9hykxB_N3aSi1Q8Qlipn3XtuTcNoCs62_RM9cIsIU357K9TygKIW3hkQKmNkmTVA/exec")}`;
       let response;
       let json: any = null;
 
@@ -206,28 +385,60 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
           console.warn(`[Transits UI] Server-side API returned status ${response.status}. Trying direct fetch fallback...`);
         }
       } catch (err) {
-        console.warn("[Transits UI] Server-side API endpoint failed, trying direct fetch to GAS:", err);
+        console.warn("[Transits UI] Server-side API endpoint failed, trying direct fetch:", err);
       }
 
-      // 2. Fallback: Try direct client-side fetch from Google Apps Script Web App
-      if (!json) {
+      // 2. Fallback: Try direct client-side fetch from Google Apps Script Web App or raw CSV published Sheets URL
+      if (!json || !Array.isArray(json.transits) || json.transits.length === 0) {
+        const gasUrl = urlToUse.trim() || "https://script.google.com/macros/s/AKfycbxEcG9hykxB_N3aSi1Q8Qlipn3XtuTcNoCs62_RM9cIsIU357K9TygKIW3hkQKmNkmTVA/exec";
         try {
-          console.log(`[Transits UI] Direct fetch to GAS: ${customSourceUrl}`);
-          response = await fetch(customSourceUrl);
+          console.log(`[Transits UI] Direct fetch to: ${gasUrl}`);
+          response = await fetch(gasUrl);
           if (response.ok) {
-            const rawData = await response.json();
-            if (rawData) {
-              const transits = Array.isArray(rawData) ? rawData : (Array.isArray(rawData.transits) ? rawData.transits : []);
-              if (transits.length > 0) {
-                json = { transits };
-                console.log("[Transits UI] Direct GAS fetch succeeded. Transits count:", transits.length);
+            const rawText = await response.text();
+            // Try parsing as JSON first
+            try {
+              const rawData = JSON.parse(rawText);
+              const transList = Array.isArray(rawData) ? rawData : (Array.isArray(rawData.transits) ? rawData.transits : []);
+              if (transList.length > 0) {
+                json = { transits: transList };
+                console.log("[Transits UI] Direct JSON fetch succeeded. Transits count:", transList.length);
+              }
+            } catch (jsonErr) {
+              // Not JSON, parse as CSV text
+              console.log("[Transits UI] Direct fetch is not JSON. Trying to parse as CSV...");
+              const parsedCsvTransits = parseCSVTextTransits(rawText);
+              if (parsedCsvTransits.length > 0) {
+                json = { transits: parsedCsvTransits };
+                console.log("[Transits UI] Direct CSV parse succeeded. Transits count:", parsedCsvTransits.length);
               }
             }
           } else {
             console.warn(`[Transits UI] Direct GAS returned status ${response.status}`);
           }
         } catch (directErr: any) {
-          console.warn("[Transits UI] Direct Google Apps Script fetch failed (possibly CORS). Using local pre-computed transits data.", directErr);
+          console.warn("[Transits UI] Direct Google Apps Script fetch failed (possibly CORS). Trying default fallback sheet as CSV...", directErr);
+        }
+      }
+
+      // 3. Fallback: Try direct client-side fetch from the default published CSV sheet if nothing loaded yet and no custom url
+      if (!json || !Array.isArray(json.transits) || json.transits.length === 0) {
+        if (!urlToUse.trim()) {
+          const defaultCsvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWqA53wQqhu2nNXSDcxeoA7gErbS0gTpPC1UjLr0ZRbIoPXmnAETdMgiPmGYuTLbmioMnxQVr6WEab/pub?gid=1478838111&single=true&output=csv";
+          try {
+            console.log(`[Transits UI] Direct fetch to Google Sheet CSV fallback: ${defaultCsvUrl}`);
+            response = await fetch(defaultCsvUrl);
+            if (response.ok) {
+              const csvText = await response.text();
+              const parsedCsvTransits = parseCSVTextTransits(csvText);
+              if (parsedCsvTransits.length > 0) {
+                json = { transits: parsedCsvTransits };
+                console.log("[Transits UI] Default CSV fetch succeeded. Transits count:", parsedCsvTransits.length);
+              }
+            }
+          } catch (csvErr: any) {
+            console.warn("[Transits UI] Fallback CSV fetch failed:", csvErr);
+          }
         }
       }
 
@@ -240,12 +451,16 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
         }));
         setTransits(enrichedTransits);
         localStorage.setItem("planetary_transits_custom", JSON.stringify(enrichedTransits));
-        localStorage.setItem("planetary_transits_custom_url", customSourceUrl);
+        if (urlToUse) {
+          localStorage.setItem("planetary_transits_custom_url", urlToUse);
+        } else {
+          localStorage.removeItem("planetary_transits_custom_url");
+        }
         localStorage.removeItem("planetary_transits_factory_active");
         setIsFactoryDefault(false);
         setSyncStatus("synced");
       } else {
-        throw new Error("Could not retrieve live planetary transit aspects from Google Sheets. Using high-probability local cycle data instead.");
+        throw new Error("Could not retrieve live planetary transit aspects from Google Sheets. Confirm Google Apps Script deployment is correct or sheet publication is active.");
       }
     } catch (error: any) {
       console.warn("[Transits UI] Error loading transits data:", error);
@@ -264,6 +479,45 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Save / update custom transits data source URL
+  const handleSaveUrl = async (url: string) => {
+    const cleanUrl = url.trim();
+    setCustomSourceUrl(cleanUrl);
+    setInputUrl(cleanUrl);
+    if (cleanUrl) {
+      localStorage.setItem("planetary_transits_custom_url", cleanUrl);
+    } else {
+      localStorage.removeItem("planetary_transits_custom_url");
+    }
+
+    try {
+      const docRef = doc(db, "settings", "planetary_transits");
+      await setDoc(docRef, { url: cleanUrl, updatedAt: new Date().toISOString() }, { merge: true });
+      console.log("Successfully saved transits URL to Firestore.");
+    } catch (err) {
+      console.error("Failed to save transits URL to Firestore:", err);
+    }
+
+    loadTransitData(cleanUrl);
+  };
+
+  // Reset transits to default source URL
+  const handleResetUrl = async () => {
+    setCustomSourceUrl("");
+    setInputUrl("");
+    localStorage.removeItem("planetary_transits_custom_url");
+
+    try {
+      const docRef = doc(db, "settings", "planetary_transits");
+      await setDoc(docRef, { url: "", updatedAt: new Date().toISOString() }, { merge: true });
+      console.log("Successfully reset transits URL in Firestore.");
+    } catch (err) {
+      console.error("Failed to reset transits URL in Firestore:", err);
+    }
+
+    loadTransitData("");
   };
 
   // Run Astro AI Alignment Analysis
@@ -309,9 +563,32 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
     }
   };
 
-  // Run dynamic fetch on mount
+  // Run dynamic fetch on mount with Firestore check
   useEffect(() => {
-    loadTransitData();
+    const initUrlAndFetch = async () => {
+      let activeUrl = customSourceUrl;
+      try {
+        const docRef = doc(db, "settings", "planetary_transits");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data && data.url !== undefined) {
+            activeUrl = data.url;
+            setCustomSourceUrl(data.url);
+            setInputUrl(data.url);
+            if (data.url) {
+              localStorage.setItem("planetary_transits_custom_url", data.url);
+            } else {
+              localStorage.removeItem("planetary_transits_custom_url");
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error reading saved transits URL from Firestore on mount:", err);
+      }
+      loadTransitData(activeUrl);
+    };
+    initUrlAndFetch();
   }, []);
 
   const today = useMemo(() => new Date(), []);
@@ -459,20 +736,80 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
 
           <button
             type="button"
-            onClick={loadTransitData}
-            disabled={isLoading}
-            className="flex items-center space-x-1.5 bg-terminal-accent/10 hover:bg-terminal-accent/20 border border-terminal-accent/30 hover:border-terminal-accent/50 text-terminal-accent text-xs font-mono font-bold px-3 py-1.5 rounded transition-all disabled:opacity-50 cursor-pointer"
-            title="Synchronize live astronomical transits from Google Sheets"
+            onClick={() => setShowSettings(!showSettings)}
+            title="Configure Custom Google Sheet / Apps Script"
+            className={`flex items-center space-x-1.5 border px-3 py-1.5 rounded transition-all cursor-pointer text-xs font-mono font-bold ${showSettings ? "bg-terminal-accent/15 border-terminal-accent text-terminal-accent" : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-terminal-accent"}`}
           >
-            {isLoading ? (
-              <span className="w-3.5 h-3.5 border-2 border-terminal-accent border-t-transparent rounded-full animate-spin"></span>
-            ) : (
-              <Database className="w-3.5 h-3.5" />
-            )}
-            <span>{isLoading ? "SYNCING..." : "SYNC SPREADSHEET"}</span>
+            <Settings className="w-3.5 h-3.5" />
+            <span>SETTINGS</span>
           </button>
         </div>
       </div>
+
+      {/* CONNECTION SETTINGS PANEL */}
+      {showSettings && (
+        <div className="bg-black/40 border border-terminal-border rounded-lg p-5 font-mono space-y-4 animate-fadeIn">
+          <div className="flex items-center justify-between border-b border-white/5 pb-2">
+            <h4 className="text-sm font-bold text-terminal-accent uppercase flex items-center">
+              <Database className="w-4 h-4 mr-2" />
+              PLANETARY TRANSITS CONNECTION MANAGER
+            </h4>
+            <button 
+              onClick={() => setShowSettings(false)}
+              className="text-xs text-gray-500 hover:text-white"
+            >
+              [CLOSE]
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-gray-400 block">
+              DATA SOURCE URL (PUBLISHED CSV OR GOOGLE APPS SCRIPT WEB APP URL):
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={inputUrl}
+                onChange={(e) => setInputUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec OR https://docs.google.com/spreadsheets/d/e/.../pubhtml..."
+                className="flex-1 bg-black/60 border border-white/10 rounded px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-terminal-accent font-mono"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleSaveUrl(inputUrl)}
+                  className="bg-terminal-accent/25 hover:bg-terminal-accent/40 text-terminal-accent border border-terminal-accent/45 px-3 py-1.5 rounded text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                >
+                  SAVE & LINK
+                </button>
+                {customSourceUrl && (
+                  <button
+                    onClick={handleResetUrl}
+                    className="bg-white/5 hover:bg-white/10 text-gray-400 border border-white/10 px-3 py-1.5 rounded text-xs transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    RESET DEFAULT
+                  </button>
+                )}
+              </div>
+            </div>
+            {customSourceUrl ? (
+              <p className="text-[10px] text-emerald-400 flex items-center">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Linked to custom source: {customSourceUrl}
+              </p>
+            ) : (
+              <p className="text-[10px] text-gray-500">
+                Using system default Google Apps Script telemetry downlink.
+              </p>
+            )}
+          </div>
+
+          <div className="border-t border-white/5 pt-3 mt-3">
+            <p className="text-[10px] text-gray-400 leading-relaxed">
+              <strong>Instructions:</strong> To use your own Google Sheets spreadsheet, you can either deploy a Google Apps Script Web App returning JSON (with CORS enabled) OR simply publish your Google Sheets worksheet to the Web as a CSV file (<code className="text-terminal-accent">File &gt; Share &gt; Publish to web &gt; Choose sheet &gt; Output as CSV</code>) and paste the resulting URL here!
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Static Fallback & Ingress Error Warning Banner */}
       {(syncStatus === "error" || isFactoryDefault) && (

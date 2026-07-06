@@ -535,29 +535,13 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
 
             <button
               type="button"
-              onClick={() => loadIngressData(customSourceUrl)}
-              disabled={isLoading}
-              className="flex items-center space-x-1.5 bg-terminal-accent/10 hover:bg-terminal-accent/20 border border-terminal-accent/30 hover:border-terminal-accent/50 text-terminal-accent text-xs font-mono font-bold px-3 py-1.5 rounded transition-all disabled:opacity-50 cursor-pointer"
-              title="Synchronize live planetary ingress dates from Google Sheets"
+              onClick={() => setShowSettings(!showSettings)}
+              title="Configure Custom Google Sheet / Apps Script"
+              className={`flex items-center space-x-1.5 border px-3 py-1.5 rounded transition-all cursor-pointer text-xs font-mono font-bold ${showSettings ? "bg-terminal-accent/15 border-terminal-accent text-terminal-accent" : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-terminal-accent"}`}
             >
-              {isLoading ? (
-                <span className="w-3.5 h-3.5 border-2 border-terminal-accent border-t-transparent rounded-full animate-spin"></span>
-              ) : (
-                <Database className="w-3.5 h-3.5" />
-              )}
-              <span>{isLoading ? "SYNCING..." : "SYNC SPREADSHEET"}</span>
+              <Settings className="w-3.5 h-3.5" />
+              <span>SETTINGS</span>
             </button>
-
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowSettings(!showSettings)}
-                title="Configure Custom Google Sheet / Apps Script"
-                className={`border p-1 rounded transition-all cursor-pointer ${showSettings ? "bg-terminal-accent/15 border-terminal-accent text-terminal-accent" : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-terminal-accent"}`}
-              >
-                <Settings className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
         </div>
         <p className="text-xs text-gray-500 font-mono mt-2">
@@ -566,7 +550,7 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
       </div>
 
       {/* CONNECTION SETTINGS PANEL */}
-      {isAdmin && showSettings && (
+      {showSettings && (
         <div className="bg-black/40 border border-terminal-border rounded-lg p-5 font-mono space-y-4 animate-fadeIn">
           <div className="flex items-center justify-between border-b border-white/5 pb-2">
             <h4 className="text-sm font-bold text-terminal-accent uppercase flex items-center">

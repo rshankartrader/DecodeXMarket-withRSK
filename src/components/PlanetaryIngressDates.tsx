@@ -13,7 +13,8 @@ import {
   Link,
   Database,
   Copy,
-  Check
+  Check,
+  Sparkles
 } from "lucide-react";
 
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -226,12 +227,31 @@ export const parseCSVTextIngress = (csvText: string): IngressEvent[] => {
 };
 
 export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: boolean } = {}) {
-  const [ingressData, setIngressData] = useState<IngressEvent[]>(STATIC_INGRESS_DATA);
+  const [ingressData, setIngressData] = useState<IngressEvent[]>(() => {
+    const saved = localStorage.getItem("planetary_ingress_custom_data");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return STATIC_INGRESS_DATA;
+      }
+    }
+    return STATIC_INGRESS_DATA;
+  });
   const [selectedPlanet, setSelectedPlanet] = useState<string>("ALL");
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [rawSearchText, setRawSearchText] = useState<string>("");
   const [timeFilter, setTimeFilter] = useState<"ALL" | "UPCOMING" | "PAST">("UPCOMING");
   const [upcomingPlanet, setUpcomingPlanet] = useState<string>("ALL");
+
+  // Astro AI States
+  const [isAstroAiLoading, setIsAstroAiLoading] = useState<boolean>(false);
+  const [astroAiRun, setAstroAiRun] = useState<boolean>(() => {
+    return localStorage.getItem("planetary_ingress_astro_ai_run") === "true";
+  });
+  const [isAstroAiFallback, setIsAstroAiFallback] = useState<boolean>(() => {
+    return localStorage.getItem("planetary_ingress_astro_ai_fallback") === "true";
+  });
   
   // Custom Google Sheets or Apps Script Web App source
   const [customSourceUrl, setCustomSourceUrl] = useState<string>(() => localStorage.getItem("planetary_ingress_custom_url") || "");
@@ -340,8 +360,12 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
 
       if (json && Array.isArray(json.events) && json.events.length > 0) {
         setIngressData(json.events);
+        localStorage.setItem("planetary_ingress_custom_data", JSON.stringify(json.events));
         setSyncStatus("synced");
         setIsFactoryDefault(false);
+        setAstroAiRun(false);
+        localStorage.removeItem("planetary_ingress_astro_ai_run");
+        localStorage.removeItem("planetary_ingress_astro_ai_fallback");
       } else {
         throw new Error("Could not retrieve live planetary ingress dates from any Google Sheets downlink. Confirm Google Apps Script deployment is correct or sheet publication is active.");
       }
@@ -395,6 +419,49 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
     }
 
     loadIngressData("");
+  };
+
+  // Run Astro AI Ingress Enrichment
+  const handleRunAstroAi = async () => {
+    if (ingressData.length === 0) return;
+    try {
+      setIsAstroAiLoading(true);
+      setErrorMsg(null);
+      
+      const response = await fetch("/api/planetary-ingress/enrich", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ingressEvents: ingressData })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || "Astro AI ingress enrichment failed.");
+      }
+
+      const data = await response.json();
+      if (data.ingressEvents && Array.isArray(data.ingressEvents)) {
+        setIngressData(data.ingressEvents);
+        localStorage.setItem("planetary_ingress_custom_data", JSON.stringify(data.ingressEvents));
+        localStorage.setItem("planetary_ingress_astro_ai_run", "true");
+        setAstroAiRun(true);
+        
+        if (data.isFallback) {
+          setIsAstroAiFallback(true);
+          localStorage.setItem("planetary_ingress_astro_ai_fallback", "true");
+        } else {
+          setIsAstroAiFallback(false);
+          localStorage.removeItem("planetary_ingress_astro_ai_fallback");
+        }
+      }
+    } catch (err: any) {
+      console.error("[Astro AI Ingress] Error enriching ingress:", err);
+      setErrorMsg(err.message || "Astro AI is temporarily offline. Please ensure your GEMINI_API_KEY is configured.");
+    } finally {
+      setIsAstroAiLoading(false);
+    }
   };
 
   // Run dynamic fetch on mount with Firestore check
@@ -934,6 +1001,23 @@ function createJsonResponse(data) {
 
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Run Astro AI button */}
+            {ingressData.length > 0 && (
+              <button
+                type="button"
+                disabled={isAstroAiLoading}
+                onClick={handleRunAstroAi}
+                className="bg-terminal-accent/10 hover:bg-terminal-accent/25 border border-terminal-accent/30 text-terminal-accent px-2.5 py-1.5 rounded text-[10px] flex items-center space-x-1 cursor-pointer transition-all uppercase font-bold disabled:opacity-50"
+              >
+                {isAstroAiLoading ? (
+                  <span className="w-3 h-3 border-2 border-terminal-accent border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  <Sparkles className="w-3 h-3 text-terminal-accent" />
+                )}
+                <span>{astroAiRun ? "ASTRO AI ACTIVE" : "RUN ASTRO AI"}</span>
+              </button>
+            )}
+
             {/* Search */}
             <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-2">
@@ -1040,7 +1124,15 @@ function createJsonResponse(data) {
                       </td>
                       <td className="sm:p-2.5 p-1.5 font-bold text-gray-300">{formatDisplayDate(item.date)}</td>
                       <td className="sm:p-2.5 p-1.5 font-mono text-gray-400">{item.time}</td>
-                      <td className="sm:p-2.5 p-1.5 text-gray-400 sm:text-[9px] text-[8px] italic leading-relaxed whitespace-normal break-words max-w-[200px] md:max-w-none">{item.marketImpact}</td>
+                      <td className="sm:p-2.5 p-1.5 text-gray-400 sm:text-[9px] text-[8px] italic leading-relaxed whitespace-normal break-words max-w-[200px] md:max-w-none">
+                        {astroAiRun && (
+                          <span className="inline-flex items-center space-x-1 text-[7.5px] bg-purple-950/40 text-purple-400 border border-purple-500/20 px-1 py-0.5 rounded font-bold uppercase tracking-tight mr-1.5 not-italic select-none">
+                            <Sparkles className="w-2 h-2 text-purple-400 shrink-0" />
+                            <span>Astro AI</span>
+                          </span>
+                        )}
+                        {item.marketImpact}
+                      </td>
                     </tr>
                   );
                 })}

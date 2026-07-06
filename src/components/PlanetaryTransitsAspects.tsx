@@ -341,7 +341,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
   const [isAstroAiLoading, setIsAstroAiLoading] = useState<boolean>(false);
 
   const [selectedTransit, setSelectedTransit] = useState<TransitAspect | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number | string>(2026);
+  const [selectedYear, setSelectedYear] = useState<number | string>("ALL");
 
 
   // Dynamic aspect filter and search states
@@ -679,6 +679,13 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
       setSelectedTransit(null);
     }
   }, [filteredLogs]);
+
+  // Ensure selected year is in unique years list or default to ALL
+  useEffect(() => {
+    if (selectedYear !== "ALL" && uniqueYears.length > 0 && !uniqueYears.includes(Number(selectedYear))) {
+      setSelectedYear("ALL");
+    }
+  }, [uniqueYears, selectedYear]);
 
   const formatDisplayDate = (dStr: string) => {
     if (!dStr) return "";

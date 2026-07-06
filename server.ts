@@ -22,6 +22,78 @@ try {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper function to robustly clean and extract a JSON block from Gemini output
+function extractCleanJson(text: string): string {
+  let clean = text.trim();
+  
+  // 1. Strip markdown code block wrapping if present
+  if (clean.startsWith("```")) {
+    // Remove starting ```json or ```
+    clean = clean.replace(/^```[a-zA-Z0-9_-]*\s*/i, "");
+    // Remove ending ``` and any text after it
+    clean = clean.replace(/\s*```[\s\S]*$/, "");
+  }
+  
+  clean = clean.trim();
+  
+  // 2. Locate first '{' or '['
+  const firstBrace = clean.indexOf("{");
+  const firstBracket = clean.indexOf("[");
+  let startIndex = -1;
+  if (firstBrace !== -1 && firstBracket !== -1) {
+    startIndex = Math.min(firstBrace, firstBracket);
+  } else {
+    startIndex = firstBrace !== -1 ? firstBrace : firstBracket;
+  }
+  
+  if (startIndex !== -1) {
+    clean = clean.substring(startIndex);
+  }
+  
+  // 3. Scan the string to find the matching closing brace/bracket, ignoring strings and escapes
+  if (clean.startsWith("{") || clean.startsWith("[")) {
+    const startChar = clean[0];
+    const endChar = startChar === "{" ? "}" : "]";
+    let braceCount = 0;
+    let inString = false;
+    let escape = false;
+    let endIndex = -1;
+    
+    for (let i = 0; i < clean.length; i++) {
+      const char = clean[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (char === "\\") {
+        escape = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (char === startChar) {
+          braceCount++;
+        } else if (char === endChar) {
+          braceCount--;
+          if (braceCount === 0) {
+            endIndex = i;
+            break;
+          }
+        }
+      }
+    }
+    
+    if (endIndex !== -1) {
+      clean = clean.substring(0, endIndex + 1);
+    }
+  }
+  
+  return clean.trim();
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -626,9 +698,9 @@ async function startServer() {
     }
 
     // Server-side validation of the URL format
-    const isValidPattern = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec\/?(\?.*)?$/.test(customUrl.trim());
+    const isValidPattern = /^https:\/\/(script\.google\.com|docs\.google\.com\/spreadsheets)/.test(customUrl.trim());
     if (!isValidPattern) {
-      return res.status(400).json({ error: "Invalid URL. Data source URL must be a valid Google Apps Script Web App link in the format: https://script.google.com/macros/s/.../exec" });
+      return res.status(400).json({ error: "Invalid URL. Data source URL must be a valid Google Apps Script Web App link (script.google.com) or a published Google Sheets URL (docs.google.com)" });
     }
 
     const fetchTransits = async (url: string): Promise<any[]> => {
@@ -1230,12 +1302,18 @@ Make sure your output is valid JSON and only returns JSON. Do not include introd
       const resultText = response.text || "{}";
       let parsed = { reply: "", niftyBias: "NEUTRAL", goldBias: "NEUTRAL" };
       try {
-        parsed = JSON.parse(resultText);
+        const cleaned = extractCleanJson(resultText);
+        parsed = JSON.parse(cleaned);
       } catch (parseErr) {
         console.warn("[Cosmic Windows] Failed to parse JSON directly, extracting code block...", parseErr);
         const match = resultText.match(/\{[\s\S]*\}/);
         if (match) {
-          parsed = JSON.parse(match[0]);
+          try {
+            parsed = JSON.parse(match[0]);
+          } catch (backupErr) {
+            console.error("[Cosmic Windows] Backup regex parsing failed:", backupErr);
+            throw backupErr;
+          }
         } else {
           throw new Error("Unable to parse JSON from Gemini response.");
         }
@@ -1330,12 +1408,18 @@ Return ONLY a valid JSON array matching the structure described. Do not wrap in 
       const resultText = response.text || "[]";
       let enrichedData = [];
       try {
-        enrichedData = JSON.parse(resultText);
+        const cleaned = extractCleanJson(resultText);
+        enrichedData = JSON.parse(cleaned);
       } catch (parseErr) {
         console.warn("[Enrich] Failed to parse Gemini JSON output directly. Attempting to extract clean JSON block...", parseErr);
         const match = resultText.match(/\[\s*\{[\s\S]*\}\s*\]/);
         if (match) {
-          enrichedData = JSON.parse(match[0]);
+          try {
+            enrichedData = JSON.parse(match[0]);
+          } catch (backupErr) {
+            console.error("[Enrich] Backup regex parsing failed:", backupErr);
+            throw backupErr;
+          }
         } else {
           throw new Error("Unable to extract clean JSON array from Gemini response.");
         }
@@ -1373,6 +1457,118 @@ Return ONLY a valid JSON array matching the structure described. Do not wrap in 
         res.json({ transits: runFallbackEnrichment(), isFallback: true });
       } catch (fallbackErr) {
         res.status(500).json({ error: "Failed to generate fallback astrological insights." });
+      }
+    }
+  });
+
+  // Gemini AI Ingress Enrichment for planetary ingress events
+  app.post("/api/planetary-ingress/enrich", async (req, res) => {
+    const { ingressEvents } = req.body;
+    if (!ingressEvents || !Array.isArray(ingressEvents) || ingressEvents.length === 0) {
+      return res.json({ ingressEvents: [] });
+    }
+
+    const runFallbackEnrichment = () => {
+      console.log("[Proxy] Running local financial astrology fallback engine for ingress.");
+      return ingressEvents.map((original) => {
+        return {
+          ...original,
+          marketImpact: original.marketImpact || `${original.planet} entering ${original.sign} initiates a critical cycle transition.`,
+        };
+      });
+    };
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn("[Proxy] GEMINI_API_KEY not found. Falling back to original ingress notes.");
+      return res.json({ ingressEvents: runFallbackEnrichment(), isFallback: true });
+    }
+
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      // Enrich a batch of ingress events
+      const batchToEnrich = ingressEvents.slice(0, 20);
+
+      const ingressSummaries = batchToEnrich.map((e, idx) => {
+        return {
+          id: e.id || `${e.planet}-${e.sign}-${e.date}-${idx}`,
+          planet: e.planet,
+          sign: e.sign,
+          date: e.date,
+          time: e.time,
+        };
+      });
+
+      const prompt = `You are a professional financial astrologer, astronomer, and market cycle analyst.
+For each of the planetary ingress events in the following JSON list, generate a specific, highly accurate-sounding, and deeply insightful financial market/sector interpretation (how a planet entering a new zodiac sign initiates a systemic cycle shift, affecting specific sectors or creating macroeconomic pivots in assets like Gold, Equities, Crypto, Tech, Sovereign Debt, Commodities, etc., with references to Gann-style patterns). 
+
+Return a JSON array of objects, where each object has:
+- "id": (must match the input ingress event "id" exactly)
+- "marketImpact": (a high-quality, professional, 2-3 sentence market and systemic cycle implication analysis. Avoid generic placeholder phrases - write a highly specific, deep, and convincing professional market impact analysis)
+
+Input list to enrich:
+${JSON.stringify(ingressSummaries, null, 2)}
+
+Return ONLY a valid JSON array matching the structure described. Do not wrap in markdown or include any introductory text.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        }
+      });
+
+      const resultText = response.text || "[]";
+      let enrichedData = [];
+      try {
+        const cleaned = extractCleanJson(resultText);
+        enrichedData = JSON.parse(cleaned);
+      } catch (parseErr) {
+        console.warn("[Enrich Ingress] Failed to parse Gemini JSON output directly. Attempting to extract clean JSON block...", parseErr);
+        const match = resultText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (match) {
+          try {
+            enrichedData = JSON.parse(match[0]);
+          } catch (backupErr) {
+            console.error("[Enrich Ingress] Backup regex parsing failed:", backupErr);
+            throw backupErr;
+          }
+        } else {
+          throw new Error("Unable to extract clean JSON array from Gemini response.");
+        }
+      }
+
+      const enrichedMap = new Map(enrichedData.map((e: any) => [e.id, e]));
+      
+      const mergedEvents = ingressEvents.map((original, idx) => {
+        const id = original.id || `${original.planet}-${original.sign}-${original.date}-${idx}`;
+        const enriched = enrichedMap.get(id);
+        if (enriched) {
+          return {
+            ...original,
+            marketImpact: enriched.marketImpact || original.marketImpact,
+          };
+        }
+        return original;
+      });
+
+      res.json({ ingressEvents: mergedEvents });
+
+    } catch (err: any) {
+      console.warn("[Gemini Ingress Enrichment Error]:", err);
+      try {
+        res.json({ ingressEvents: runFallbackEnrichment(), isFallback: true });
+      } catch (fallbackErr) {
+        res.status(500).json({ error: "Failed to generate fallback ingress insights." });
       }
     }
   });

@@ -22,78 +22,6 @@ try {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Helper function to robustly clean and extract a JSON block from Gemini output
-function extractCleanJson(text: string): string {
-  let clean = text.trim();
-  
-  // 1. Strip markdown code block wrapping if present
-  if (clean.startsWith("```")) {
-    // Remove starting ```json or ```
-    clean = clean.replace(/^```[a-zA-Z0-9_-]*\s*/i, "");
-    // Remove ending ``` and any text after it
-    clean = clean.replace(/\s*```[\s\S]*$/, "");
-  }
-  
-  clean = clean.trim();
-  
-  // 2. Locate first '{' or '['
-  const firstBrace = clean.indexOf("{");
-  const firstBracket = clean.indexOf("[");
-  let startIndex = -1;
-  if (firstBrace !== -1 && firstBracket !== -1) {
-    startIndex = Math.min(firstBrace, firstBracket);
-  } else {
-    startIndex = firstBrace !== -1 ? firstBrace : firstBracket;
-  }
-  
-  if (startIndex !== -1) {
-    clean = clean.substring(startIndex);
-  }
-  
-  // 3. Scan the string to find the matching closing brace/bracket, ignoring strings and escapes
-  if (clean.startsWith("{") || clean.startsWith("[")) {
-    const startChar = clean[0];
-    const endChar = startChar === "{" ? "}" : "]";
-    let braceCount = 0;
-    let inString = false;
-    let escape = false;
-    let endIndex = -1;
-    
-    for (let i = 0; i < clean.length; i++) {
-      const char = clean[i];
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (char === "\\") {
-        escape = true;
-        continue;
-      }
-      if (char === '"') {
-        inString = !inString;
-        continue;
-      }
-      if (!inString) {
-        if (char === startChar) {
-          braceCount++;
-        } else if (char === endChar) {
-          braceCount--;
-          if (braceCount === 0) {
-            endIndex = i;
-            break;
-          }
-        }
-      }
-    }
-    
-    if (endIndex !== -1) {
-      clean = clean.substring(0, endIndex + 1);
-    }
-  }
-  
-  return clean.trim();
-}
-
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -1302,18 +1230,12 @@ Make sure your output is valid JSON and only returns JSON. Do not include introd
       const resultText = response.text || "{}";
       let parsed = { reply: "", niftyBias: "NEUTRAL", goldBias: "NEUTRAL" };
       try {
-        const cleaned = extractCleanJson(resultText);
-        parsed = JSON.parse(cleaned);
+        parsed = JSON.parse(resultText);
       } catch (parseErr) {
         console.warn("[Cosmic Windows] Failed to parse JSON directly, extracting code block...", parseErr);
         const match = resultText.match(/\{[\s\S]*\}/);
         if (match) {
-          try {
-            parsed = JSON.parse(match[0]);
-          } catch (backupErr) {
-            console.error("[Cosmic Windows] Backup regex parsing failed:", backupErr);
-            throw backupErr;
-          }
+          parsed = JSON.parse(match[0]);
         } else {
           throw new Error("Unable to parse JSON from Gemini response.");
         }
@@ -1408,18 +1330,12 @@ Return ONLY a valid JSON array matching the structure described. Do not wrap in 
       const resultText = response.text || "[]";
       let enrichedData = [];
       try {
-        const cleaned = extractCleanJson(resultText);
-        enrichedData = JSON.parse(cleaned);
+        enrichedData = JSON.parse(resultText);
       } catch (parseErr) {
         console.warn("[Enrich] Failed to parse Gemini JSON output directly. Attempting to extract clean JSON block...", parseErr);
         const match = resultText.match(/\[\s*\{[\s\S]*\}\s*\]/);
         if (match) {
-          try {
-            enrichedData = JSON.parse(match[0]);
-          } catch (backupErr) {
-            console.error("[Enrich] Backup regex parsing failed:", backupErr);
-            throw backupErr;
-          }
+          enrichedData = JSON.parse(match[0]);
         } else {
           throw new Error("Unable to extract clean JSON array from Gemini response.");
         }
@@ -1530,18 +1446,12 @@ Return ONLY a valid JSON array matching the structure described. Do not wrap in 
       const resultText = response.text || "[]";
       let enrichedData = [];
       try {
-        const cleaned = extractCleanJson(resultText);
-        enrichedData = JSON.parse(cleaned);
+        enrichedData = JSON.parse(resultText);
       } catch (parseErr) {
         console.warn("[Enrich Ingress] Failed to parse Gemini JSON output directly. Attempting to extract clean JSON block...", parseErr);
         const match = resultText.match(/\[\s*\{[\s\S]*\}\s*\]/);
         if (match) {
-          try {
-            enrichedData = JSON.parse(match[0]);
-          } catch (backupErr) {
-            console.error("[Enrich Ingress] Backup regex parsing failed:", backupErr);
-            throw backupErr;
-          }
+          enrichedData = JSON.parse(match[0]);
         } else {
           throw new Error("Unable to extract clean JSON array from Gemini response.");
         }

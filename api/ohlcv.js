@@ -46,13 +46,15 @@ export default async function handler(req, res) {
     const quote = result.indicators?.quote?.[0] || {};
     const { open = [], high = [], low = [], close = [], volume = [] } = quote;
 
+    const round1 = (n) => (typeof n === "number" ? Math.round(n * 10) / 10 : n);
+
     const candles = timestamps
       .map((time, i) => ({
         time,
-        open: open[i],
-        high: high[i],
-        low: low[i],
-        close: close[i],
+        open: round1(open[i]),
+        high: round1(high[i]),
+        low: round1(low[i]),
+        close: round1(close[i]),
         volume: volume[i],
       }))
       // Yahoo sometimes includes null rows for non-trading periods; drop them

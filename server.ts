@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import axios from "axios";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import nodemailer from "nodemailer";
 import admin from "firebase-admin";
 
@@ -1224,6 +1224,24 @@ Make sure your output is valid JSON and only returns JSON. Do not include introd
         contents: prompt,
         config: {
           responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              reply: {
+                type: Type.STRING,
+                description: "highly detailed and beautifully structured markdown containing headers, list items, and clear bias rationale",
+              },
+              niftyBias: {
+                type: Type.STRING,
+                description: "The market bias for Nifty 50. Must be BULLISH, BEARISH, NEUTRAL, or VOLATILE",
+              },
+              goldBias: {
+                type: Type.STRING,
+                description: "The market bias for Gold. Must be BULLISH, BEARISH, NEUTRAL, or VOLATILE",
+              },
+            },
+            required: ["reply", "niftyBias", "goldBias"],
+          },
         }
       });
 
@@ -1324,6 +1342,34 @@ Return ONLY a valid JSON array matching the structure described. Do not wrap in 
         contents: prompt,
         config: {
           responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: {
+                  type: Type.STRING,
+                  description: "Must match the input transit id exactly",
+                },
+                marketImpact: {
+                  type: Type.STRING,
+                  description: "a high-quality, professional, 2-3 sentence market alignment analysis",
+                },
+                sectors: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.STRING,
+                  },
+                  description: "an array of 2-4 sensitive sectors/assets, e.g. Gold, NASDAQ, USD Forex, Crude Oil, Treasuries",
+                },
+                strength: {
+                  type: Type.STRING,
+                  description: "either HIGH, MEDIUM, or LOW based on the celestial significance",
+                },
+              },
+              required: ["id", "marketImpact", "sectors", "strength"],
+            },
+          },
         }
       });
 
@@ -1440,6 +1486,23 @@ Return ONLY a valid JSON array matching the structure described. Do not wrap in 
         contents: prompt,
         config: {
           responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: {
+                  type: Type.STRING,
+                  description: "Must match the input ingress event id exactly",
+                },
+                marketImpact: {
+                  type: Type.STRING,
+                  description: "a high-quality, professional, 2-3 sentence market and systemic cycle implication analysis",
+                },
+              },
+              required: ["id", "marketImpact"],
+            },
+          },
         }
       });
 

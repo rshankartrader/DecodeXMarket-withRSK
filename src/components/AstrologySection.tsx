@@ -139,6 +139,13 @@ export default function AstrologySection({ isAdmin = false }: AstrologySectionPr
     }
   });
   const [astroAiError, setAstroAiError] = useState<string | null>(null);
+  const [transitsRefreshTick, setTransitsRefreshTick] = useState(0);
+
+  useEffect(() => {
+    const handler = () => setTransitsRefreshTick((t) => t + 1);
+    window.addEventListener("planetary_transits_updated", handler);
+    return () => window.removeEventListener("planetary_transits_updated", handler);
+  }, []);
 
   useEffect(() => {
     try {

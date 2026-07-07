@@ -459,6 +459,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
         localStorage.removeItem("planetary_transits_factory_active");
         setIsFactoryDefault(false);
         setSyncStatus("synced");
+        window.dispatchEvent(new Event("planetary_transits_updated"));
       } else {
         throw new Error("Could not retrieve live planetary transit aspects from Google Sheets. Confirm Google Apps Script deployment is correct or sheet publication is active.");
       }
@@ -546,6 +547,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
         localStorage.setItem("planetary_transits_custom", JSON.stringify(data.transits));
         localStorage.setItem("planetary_transits_astro_ai_run", "true");
         setAstroAiRun(true);
+        window.dispatchEvent(new Event("planetary_transits_updated"));
         
         if (data.isFallback) {
           setIsAstroAiFallback(true);

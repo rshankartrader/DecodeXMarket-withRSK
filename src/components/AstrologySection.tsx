@@ -641,14 +641,8 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
       setLoadingPrices(true);
       try {
         const symbol = getSymbolForInstrument(selectedInstrument);
-        const isStaticPlatform = typeof window !== "undefined" && 
-          !window.location.origin.includes("run.app") && 
-          window.location.port !== "3000";
-        
-        const backendBaseUrl = isStaticPlatform
-          ? "https://ais-pre-6vodvvafk3656znl4wvgf6-590060030585.asia-southeast1.run.app"
-          : "";
-        const res = await fetch(`${backendBaseUrl}/api/ohlcv?source=yfinance&symbol=${symbol}&interval=1d&limit=365`);
+        // Always use the relative path — this Vercel app now serves its own /api/ohlcv
+        const res = await fetch(`/api/ohlcv?source=yfinance&symbol=${symbol}&interval=1d&limit=365`);
         if (!res.ok) throw new Error("Status " + res.status);
         const data = await res.json();
         if (active && data && data.candles) {
@@ -661,9 +655,7 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
       }
     };
     fetchRealPrices();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [selectedInstrument]);
 
   const getRealOrSimulatedPrice = (instrument: string, date: Date) => {

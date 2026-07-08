@@ -641,7 +641,14 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
       setLoadingPrices(true);
       try {
         const symbol = getSymbolForInstrument(selectedInstrument);
-        const res = await fetch(`/api/ohlcv?source=yfinance&symbol=${symbol}&interval=1d&limit=365`);
+        const isStaticPlatform = typeof window !== "undefined" && 
+          !window.location.origin.includes("run.app") && 
+          window.location.port !== "3000";
+        
+        const backendBaseUrl = isStaticPlatform
+          ? "https://ais-pre-6vodvvafk3656znl4wvgf6-590060030585.asia-southeast1.run.app"
+          : "";
+        const res = await fetch(`${backendBaseUrl}/api/ohlcv?source=yfinance&symbol=${symbol}&interval=1d&limit=365`);
         if (!res.ok) throw new Error("Status " + res.status);
         const data = await res.json();
         if (active && data && data.candles) {
@@ -661,17 +668,12 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
 
   const getRealOrSimulatedPrice = (instrument: string, date: Date) => {
     if (historicalData && historicalData.length > 0) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const targetDateStr = `${year}-${month}-${day}`;
+      const targetDateStr = date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
       const found = historicalData.find(candle => {
         const cDate = new Date(candle.time * 1000);
-        const cYear = cDate.getUTCFullYear();
-        const cMonth = String(cDate.getUTCMonth() + 1).padStart(2, "0");
-        const cDay = String(cDate.getUTCDate()).padStart(2, "0");
-        return `${cYear}-${cMonth}-${cDay}` === targetDateStr;
+        const cDateStr = cDate.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+        return cDateStr === targetDateStr;
       });
 
       if (found) {
@@ -684,40 +686,10 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
       }
     }
 
-    // Generate deterministic simulated fallback rates based on instrument & date
-    const cleanInst = instrument.trim().toUpperCase();
-    let basePrice = 24200; // default Nifty 50
-    if (cleanInst.includes("BANK") || cleanInst === "BANKNIFTY") basePrice = 52500;
-    else if (cleanInst.includes("SENSEX")) basePrice = 79500;
-    else if (cleanInst !== "NIFTY 50" && cleanInst) {
-      if (cleanInst === "RELIANCE") basePrice = 2450;
-      else if (cleanInst === "TCS") basePrice = 3850;
-      else if (cleanInst === "INFY") basePrice = 1620;
-      else if (cleanInst === "SBIN") basePrice = 840;
-      else basePrice = 1850;
-    }
-
-    // Create a deterministic hash from instrument and date
-    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    let hash = 0;
-    const combinedStr = cleanInst + dateStr;
-    for (let i = 0; i < combinedStr.length; i++) {
-      hash = (hash << 5) - hash + combinedStr.charCodeAt(i);
-      hash |= 0;
-    }
-    
-    // Normalize hash to [0, 1] range
-    const rand = Math.abs(Math.sin(hash)) * 1000 % 1;
-    const randVol = (rand - 0.5) * 0.012; // up to 0.6% daily change
-    
-    const close = Math.round(basePrice * (1 + randVol) * 100) / 100;
-    const high = Math.round(close * (1 + Math.abs(rand) * 0.007) * 100) / 100;
-    const low = Math.round(close * (1 - Math.abs(rand) * 0.007) * 100) / 100;
-
     return {
-      high,
-      low,
-      close,
+      high: null,
+      low: null,
+      close: null,
       isReal: false
     };
   };
@@ -1935,9 +1907,9 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
                       <span className={`text-[8px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
                         isUsingRealData 
                           ? "bg-terminal-green/10 text-terminal-green border border-terminal-green/20" 
-                          : "bg-yellow-400/10 text-yellow-500 border border-yellow-500/20"
+                          : "bg-terminal-red/10 text-terminal-red border border-terminal-red/20"
                       }`}>
-                        {isUsingRealData ? "LIVE FEED ACTIVE" : "SIMULATED FEED"}
+                        {isUsingRealData ? "LIVE FEED ACTIVE" : "LIVE FEED INACTIVE"}
                       </span>
                     </div>
 

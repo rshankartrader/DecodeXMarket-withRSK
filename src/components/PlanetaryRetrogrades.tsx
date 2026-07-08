@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Sparkles, 
   Calendar, 
@@ -160,6 +161,7 @@ export const RETROGRADE_DATA: RetrogradePeriod[] = [
 ];
 
 export default function PlanetaryRetrogrades() {
+  const [isExplorerOpen, setIsExplorerOpen] = useState<boolean>(false);
   const [selectedPlanet, setSelectedPlanet] = useState<string>("ALL");
   const [selectedYear, setSelectedYear] = useState<number>(2026);
 
@@ -328,113 +330,155 @@ export default function PlanetaryRetrogrades() {
 
       </div>
 
-      {/* YEARLY RETROGRADE EXPLORER PANEL */}
-      <div className="bg-white/[0.01] border border-white/5 rounded-lg p-5 font-mono space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-3">
-          <div className="space-y-1">
-            <span className="text-xs font-bold text-white uppercase flex items-center">
-              <Compass className="w-4 h-4 text-terminal-accent mr-1.5" />
-              ASTRO RETROGRADE EXPLORER & CALENDAR
-            </span>
-            <p className="text-[10px] text-gray-500">Filter through historical and futuristic retrograde events to cross-verify major market cyclical tops.</p>
+      {/* YEARLY RETROGRADE EXPLORER PANEL PREVIEW */}
+      <div className="bg-gradient-to-b from-white/[0.01] to-transparent border border-white/5 rounded-xl p-6 font-mono text-center space-y-4">
+        <div className="flex flex-col items-center space-y-2 max-w-lg mx-auto">
+          <div className="bg-terminal-accent/10 border border-terminal-accent/20 p-3 rounded-full">
+            <Compass className="w-6 h-6 text-terminal-accent animate-spin-slow" />
           </div>
+          <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+            ASTRO RETROGRADE EXPLORER & CALENDAR
+          </h4>
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            Access the full historical and predictive retrograde matrix for years 2026 to 2036. Analyze long-term cosmological speed anomalies paired with direct index catalyst projections.
+          </p>
+        </div>
+        
+        <button
+          onClick={() => setIsExplorerOpen(true)}
+          className="mx-auto bg-terminal-accent/15 hover:bg-terminal-accent/30 border border-terminal-accent/30 hover:border-terminal-accent/50 text-terminal-accent text-[11px] font-black uppercase px-6 py-2.5 rounded transition-all tracking-wider flex items-center space-x-2 cursor-pointer shadow-lg hover:shadow-terminal-accent/5"
+        >
+          <span>VIEW ALL RETROGRADE MATRIX</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="space-y-1">
-              <label className="text-[8px] text-gray-400 uppercase font-bold block">Planet Filter</label>
-              <select
-                value={selectedPlanet}
-                onChange={(e) => setSelectedPlanet(e.target.value)}
-                className="bg-terminal-bg border border-terminal-border rounded p-1.5 text-[10px] text-white focus:border-terminal-accent outline-none font-mono"
-              >
-                <option value="ALL">ALL PLANETS</option>
-                {planetsList.map((p) => (
-                  <option key={p} value={p}>{p.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[8px] text-gray-400 uppercase font-bold block">Year Selector</label>
-              <div className="flex bg-terminal-bg border border-terminal-border rounded p-0.5">
-                {yearsList.slice(0, 6).map((y) => (
-                  <button
-                    key={y}
-                    onClick={() => setSelectedYear(y)}
-                    className={`px-2 py-1 rounded text-[9px] font-black transition-all ${
-                      selectedYear === y 
-                        ? "bg-terminal-accent text-white" 
-                        : "text-gray-400 hover:text-white"
-                    }`}
-                  >
-                    {y}
-                  </button>
-                ))}
-                <select
-                  value={yearsList.includes(selectedYear) && selectedYear >= 2032 ? selectedYear : 2032}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="bg-transparent border-none text-[9px] text-gray-400 hover:text-white font-bold px-1.5 outline-none font-mono cursor-pointer"
+      <AnimatePresence>
+        {isExplorerOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/98 backdrop-blur-xl p-6 md:p-10 font-mono flex flex-col space-y-6"
+          >
+            {/* Header / Nav bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
+              <div className="space-y-1">
+                <button
+                  onClick={() => setIsExplorerOpen(false)}
+                  className="flex items-center text-[10px] font-bold text-gray-400 hover:text-terminal-accent uppercase tracking-wider mb-2 transition-colors cursor-pointer group"
                 >
-                  <option value="2032" className="bg-terminal-bg text-white">2032</option>
-                  <option value="2033" className="bg-terminal-bg text-white">2033</option>
-                  <option value="2034" className="bg-terminal-bg text-white">2034</option>
-                  <option value="2035" className="bg-terminal-bg text-white">2035</option>
-                  <option value="2036" className="bg-terminal-bg text-white">2036</option>
-                </select>
+                  <span className="mr-1 group-hover:-translate-x-0.5 transition-transform">←</span> BACK TO MAIN DASHBOARD
+                </button>
+                <h2 className="text-sm font-black text-white uppercase flex items-center tracking-widest">
+                  <Compass className="w-5 h-5 text-terminal-accent mr-2 animate-pulse" />
+                  ASTRO RETROGRADE EXPLORER & CALENDAR
+                </h2>
+                <p className="text-[10px] text-gray-500">Chronological list of planetary speed reversals and target market cycle exhaustions.</p>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="space-y-1">
+                  <label className="text-[8px] text-gray-500 uppercase font-bold block">Planet Filter</label>
+                  <select
+                    value={selectedPlanet}
+                    onChange={(e) => setSelectedPlanet(e.target.value)}
+                    className="bg-neutral-900 border border-white/10 rounded p-1.5 text-[10px] text-white focus:border-terminal-accent outline-none font-mono cursor-pointer"
+                  >
+                    <option value="ALL">ALL PLANETS</option>
+                    {planetsList.map((p) => (
+                      <option key={p} value={p}>{p.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[8px] text-gray-500 uppercase font-bold block">Year Selector</label>
+                  <div className="flex bg-neutral-900 border border-white/10 rounded p-0.5">
+                    {yearsList.map((y) => (
+                      <button
+                        key={y}
+                        onClick={() => setSelectedYear(y)}
+                        className={`px-2 py-1 rounded text-[9px] font-black transition-all ${
+                          selectedYear === y 
+                            ? "bg-terminal-accent text-white" 
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {filteredRetrogrades.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border border-white/5">
-            <table className="w-full text-left border-collapse text-[10px]">
-              <thead>
-                <tr className="bg-white/5 text-gray-400 border-b border-white/5">
-                  <th className="p-2.5 font-bold uppercase">Planet</th>
-                  <th className="p-2.5 font-bold uppercase">Retrograde Begins</th>
-                  <th className="p-2.5 font-bold uppercase">Retrograde Ends</th>
-                  <th className="p-2.5 font-bold uppercase text-center">Duration</th>
-                  <th className="p-2.5 font-bold uppercase">Astrological Implications / Market Impact details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRetrogrades.map((res, idx) => {
-                  const startD = new Date(res.startDate);
-                  const endD = new Date(res.endDate);
-                  const isCurrent = today >= startD && today <= endD;
-                  
-                  return (
-                    <tr 
-                      key={idx} 
-                      className={`border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors ${
-                        isCurrent ? "bg-red-500/[0.02] border-l-2 border-l-red-500" : ""
-                      }`}
-                    >
-                      <td className="p-2.5 font-black text-white flex items-center space-x-1.5">
-                        <span className="text-terminal-accent text-xs">{res.symbol}</span>
-                        <span>{res.planet}</span>
-                        {isCurrent && (
-                          <span className="text-[7px] font-black bg-red-500/20 text-red-400 px-1 rounded animate-pulse">ACTIVE</span>
-                        )}
-                      </td>
-                      <td className="p-2.5 font-bold text-gray-300">{formatDisplayDate(res.startDate)}</td>
-                      <td className="p-2.5 font-bold text-gray-300">{formatDisplayDate(res.endDate)}</td>
-                      <td className="p-2.5 font-black text-center text-terminal-accent">{res.duration} Days</td>
-                      <td className="p-2.5 text-gray-400 text-[9px] italic leading-relaxed">{res.details}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="p-8 text-center bg-white/[0.01] border border-white/5 rounded-lg text-xs text-gray-500 leading-relaxed">
-            No retrogrades matching the selected criteria found in {selectedYear}. Direct motion dominates this year's planetary chart.
-          </div>
+            {/* Main Full Page Content */}
+            <div className="flex-1 space-y-6">
+              {filteredRetrogrades.length > 0 ? (
+                <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/40">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="bg-white/5 text-gray-400 border-b border-white/10">
+                        <th className="p-3.5 font-bold uppercase">Planet</th>
+                        <th className="p-3.5 font-bold uppercase">Retrograde Begins</th>
+                        <th className="p-3.5 font-bold uppercase">Retrograde Ends</th>
+                        <th className="p-3.5 font-bold uppercase text-center">Duration</th>
+                        <th className="p-3.5 font-bold uppercase">Astrological Implications / Market Impact details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRetrogrades.map((res, idx) => {
+                        const startD = new Date(res.startDate);
+                        const endD = new Date(res.endDate);
+                        const isCurrent = today >= startD && today <= endD;
+                        
+                        return (
+                          <tr 
+                            key={idx} 
+                            className={`border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors ${
+                              isCurrent ? "bg-red-500/[0.04] border-l-2 border-l-red-500 animate-pulse" : ""
+                            }`}
+                          >
+                            <td className="p-3.5 font-black text-white flex items-center space-x-1.5">
+                              <span className="text-terminal-accent text-xs">{res.symbol}</span>
+                              <span>{res.planet}</span>
+                              {isCurrent && (
+                                <span className="text-[7px] font-black bg-red-500/20 text-red-400 px-1 rounded">ACTIVE</span>
+                              )}
+                            </td>
+                            <td className="p-3.5 font-bold text-gray-300">{formatDisplayDate(res.startDate)}</td>
+                            <td className="p-3.5 font-bold text-gray-300">{formatDisplayDate(res.endDate)}</td>
+                            <td className="p-3.5 font-black text-center text-terminal-accent">{res.duration} Days</td>
+                            <td className="p-3.5 text-gray-400 text-[10px] italic leading-relaxed">{res.details}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-12 text-center bg-white/[0.01] border border-white/5 rounded-lg text-xs text-gray-500 leading-relaxed font-mono">
+                  No retrogrades matching the selected criteria found in {selectedYear}. Direct motion dominates this year's planetary chart.
+                </div>
+              )}
+            </div>
+
+            {/* Footer with a quick back action */}
+            <div className="border-t border-white/10 pt-4 flex justify-between items-center text-[9px] text-gray-500">
+              <span>ASTRO RETROGRADE MATRIX • DETAILED DATASET LAYER</span>
+              <button
+                onClick={() => setIsExplorerOpen(false)}
+                className="bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 px-3 py-1 rounded cursor-pointer transition-all"
+              >
+                CLOSE EXPLORER
+              </button>
+            </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }

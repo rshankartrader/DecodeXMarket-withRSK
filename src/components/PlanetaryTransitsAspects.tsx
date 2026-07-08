@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Calendar, 
   Sparkles, 
@@ -319,6 +320,7 @@ export const parseCSVTextTransits = (csvText: string): TransitAspect[] => {
 };
 
 export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?: boolean }) {
+  const [isExplorerOpen, setIsExplorerOpen] = useState<boolean>(false);
   const [isFactoryDefault, setIsFactoryDefault] = useState<boolean>(() => {
     const saved = localStorage.getItem("planetary_transits_custom");
     return !saved;
@@ -1030,264 +1032,310 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
 
       </div>
 
-      {/* DEDICATED SEPARATE BOX: Planetary Aspects & Transits Calendar Logs */}
-      <div className="border border-terminal-border bg-black/35 rounded-xl p-5 space-y-5">
+      {/* DEDICATED SEPARATE BOX PREVIEW */}
+      <div className="bg-gradient-to-b from-white/[0.01] to-transparent border border-white/5 rounded-xl p-6 font-mono text-center space-y-4">
+        <div className="flex flex-col items-center space-y-2 max-w-lg mx-auto">
+          <div className="bg-terminal-accent/10 border border-terminal-accent/20 p-3 rounded-full">
+            <Calendar className="w-6 h-6 text-terminal-accent animate-pulse" />
+          </div>
+          <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+            PLANETARY ASPECTS & TRANSITS CALENDAR LOGS
+          </h4>
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            Access the comprehensive alignment query matrix with planet, aspect type, strength indicators, and historic backtest results.
+          </p>
+        </div>
         
-        {/* Box Header & Interactive Search/Filter Section */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/5 pb-4">
-          <div>
-            <h4 className="text-sm font-black text-white uppercase flex items-center space-x-2 font-sans">
-              <Calendar className="w-4 h-4 text-terminal-accent" />
-              <span>PLANETARY ASPECTS & TRANSITS CALENDAR LOGS</span>
-            </h4>
-            <p className="text-[10px] text-gray-500 font-mono mt-0.5">
-              Comprehensive chronological alignment query matrix with planet, aspect type, and custom search filters.
-            </p>
-          </div>
+        <button
+          onClick={() => setIsExplorerOpen(true)}
+          className="mx-auto bg-terminal-accent/15 hover:bg-terminal-accent/30 border border-terminal-accent/30 hover:border-terminal-accent/50 text-terminal-accent text-[11px] font-black uppercase px-6 py-2.5 rounded transition-all tracking-wider flex items-center space-x-2 cursor-pointer shadow-lg hover:shadow-terminal-accent/5"
+        >
+          <span>VIEW ALL CALENDAR LOGS</span>
+          <ChevronRight className="w-3.5 h-3.5 text-terminal-accent" />
+        </button>
+      </div>
 
-          <span className="text-[10px] bg-white/5 px-2.5 py-1 rounded text-gray-400 font-mono self-start lg:self-center uppercase">
-            Logged Alignments: <strong className="text-white">{filteredLogs.length}</strong> / {transits.length}
-          </span>
-        </div>
-
-        {/* Highly Interactive Filters Dashboard */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 font-mono text-[11px]">
-          {/* Year wise Filter */}
-          <div className="space-y-1">
-            <span className="text-[9px] text-gray-500 uppercase font-black block">Year Filter:</span>
-            <select
-              value={selectedYear}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedYear(val === "ALL" ? "ALL" : Number(val));
-              }}
-              className="w-full bg-neutral-900 border border-white/10 rounded px-2.5 py-1.5 text-gray-200 focus:border-terminal-accent outline-none cursor-pointer uppercase font-bold"
-            >
-              <option value="ALL">ALL YEARS</option>
-              {uniqueYears.map(yr => (
-                <option key={yr} value={yr}>{yr}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Planets Filter */}
-          <div className="space-y-1">
-            <span className="text-[9px] text-gray-500 uppercase font-black block">Planet Filter:</span>
-            <select
-              value={selectedPlanet}
-              onChange={(e) => setSelectedPlanet(e.target.value)}
-              className="w-full bg-neutral-900 border border-white/10 rounded px-2.5 py-1.5 text-gray-200 focus:border-terminal-accent outline-none cursor-pointer uppercase font-bold"
-            >
-              <option value="ALL">ALL PLANETS</option>
-              {uniquePlanets.map(p => (
-                <option key={p} value={p}>{p.toUpperCase()}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Aspect Type Filter */}
-          <div className="space-y-1">
-            <span className="text-[9px] text-gray-500 uppercase font-black block">Aspect Type:</span>
-            <select
-              value={selectedAspectType}
-              onChange={(e) => setSelectedAspectType(e.target.value)}
-              className="w-full bg-neutral-900 border border-white/10 rounded px-2.5 py-1.5 text-gray-200 focus:border-terminal-accent outline-none cursor-pointer uppercase font-bold"
-            >
-              <option value="ALL">ALL ASPECTS</option>
-              {uniqueAspectTypes.map(aspect => (
-                <option key={aspect} value={aspect}>{aspect.toUpperCase()}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Time Frame Filter */}
-          <div className="space-y-1">
-            <span className="text-[9px] text-gray-500 uppercase font-black block">Time Frame:</span>
-            <select
-              value={timeFilter}
-              onChange={(e) => setTimeFilter(e.target.value as any)}
-              className="w-full bg-neutral-900 border border-white/10 rounded px-2.5 py-1.5 text-gray-200 focus:border-terminal-accent outline-none cursor-pointer uppercase font-bold"
-            >
-              <option value="ALL">ALL DATES</option>
-              <option value="UPCOMING">UPCOMING DATES</option>
-              <option value="PAST">PAST DATES</option>
-            </select>
-          </div>
-
-          {/* Text Search filter */}
-          <div className="space-y-1">
-            <span className="text-[9px] text-gray-500 uppercase font-black block">Search Keywords:</span>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-500" />
-              <input
-                type="text"
-                placeholder="Search gold, degree, etc..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-neutral-900 border border-white/10 rounded pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-gray-600 focus:border-terminal-accent outline-none"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Split Logs Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
-          
-          {/* Logs List Panel (7 Columns) */}
-          <div className="lg:col-span-7 space-y-3.5">
-            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-wider border-b border-white/5 pb-1">
-              CHRONOLOGICAL LOGS MATRIX
-            </div>
-
-            {filteredLogs.length === 0 ? (
-              <div className="bg-black/40 border border-white/5 rounded-lg p-10 text-center text-xs text-gray-500 font-mono">
-                No matching celestial alignments logged. Adjust filters above to expand query scope.
+      <AnimatePresence>
+        {isExplorerOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/98 backdrop-blur-xl p-6 md:p-10 font-mono flex flex-col space-y-6 text-left"
+          >
+            {/* Header / Nav bar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
+              <div className="space-y-1">
+                <button
+                  onClick={() => setIsExplorerOpen(false)}
+                  className="flex items-center text-[10px] font-bold text-gray-400 hover:text-terminal-accent uppercase tracking-wider mb-2 transition-colors cursor-pointer group"
+                >
+                  <span className="mr-1 group-hover:-translate-x-0.5 transition-transform">←</span> BACK TO MAIN DASHBOARD
+                </button>
+                <h2 className="text-sm font-black text-white uppercase flex items-center tracking-widest">
+                  <Calendar className="w-5 h-5 text-terminal-accent mr-2 animate-pulse" />
+                  PLANETARY ASPECTS & TRANSITS CALENDAR LOGS
+                </h2>
+                <p className="text-[10px] text-gray-500">
+                  Comprehensive chronological alignment query matrix with planet, aspect type, and custom search filters.
+                </p>
               </div>
-            ) : (
-              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-                {filteredLogs.map((aspect) => {
-                  const isSelected = selectedTransit?.id === aspect.id;
 
-                  return (
-                    <div
-                      key={aspect.id}
-                      onClick={() => setSelectedTransit(aspect)}
-                      className={`p-3 rounded-lg border transition-all cursor-pointer text-left flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                        isSelected 
-                          ? "bg-terminal-accent/10 border-terminal-accent/60 shadow-[0_0_12px_rgba(234,179,8,0.06)]" 
-                          : "bg-black/30 border-white/5 hover:border-white/20 hover:bg-black/40"
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="bg-white/5 border border-white/5 rounded px-2 py-1 flex items-center space-x-1 shrink-0">
-                          <span className="text-sm font-serif text-white">{aspect.planet1Symbol}</span>
-                          <span className="text-[10px] text-gray-500">{aspect.aspectSymbol}</span>
-                          <span className="text-sm font-serif text-white">{aspect.planet2Symbol}</span>
-                        </div>
-                        
-                        <div>
-                          <span className="text-xs font-mono font-bold text-gray-200 uppercase block leading-snug">
-                            {aspect.planet1} {aspect.aspectType} {aspect.planet2}
-                          </span>
-                          <div className="flex items-center space-x-2 text-[10px] text-gray-500 mt-0.5">
-                            <span>{formatDisplayDate(aspect.date)}</span>
-                            <span>•</span>
-                            <span className="text-terminal-accent font-bold">{aspect.degree} Axis</span>
+              <span className="text-[10px] bg-white/5 px-2.5 py-1.5 rounded text-gray-400 font-mono uppercase">
+                Logged Alignments: <strong className="text-white">{filteredLogs.length}</strong> / {transits.length}
+              </span>
+            </div>
+
+            {/* Interactive Filters Dashboard */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-[11px]">
+              {/* Year wise Filter */}
+              <div className="space-y-1">
+                <span className="text-[9px] text-gray-500 uppercase font-black block">Year Filter:</span>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedYear(val === "ALL" ? "ALL" : Number(val));
+                  }}
+                  className="w-full bg-neutral-900 border border-white/10 rounded px-2.5 py-2 text-gray-200 focus:border-terminal-accent outline-none cursor-pointer uppercase font-bold"
+                >
+                  <option value="ALL">ALL YEARS</option>
+                  {uniqueYears.map(yr => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Planets Filter */}
+              <div className="space-y-1">
+                <span className="text-[9px] text-gray-500 uppercase font-black block">Planet Filter:</span>
+                <select
+                  value={selectedPlanet}
+                  onChange={(e) => setSelectedPlanet(e.target.value)}
+                  className="w-full bg-neutral-900 border border-white/10 rounded px-2.5 py-2 text-gray-200 focus:border-terminal-accent outline-none cursor-pointer uppercase font-bold"
+                >
+                  <option value="ALL">ALL PLANETS</option>
+                  {uniquePlanets.map(p => (
+                    <option key={p} value={p}>{p.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Aspect Type Filter */}
+              <div className="space-y-1">
+                <span className="text-[9px] text-gray-500 uppercase font-black block">Aspect Type:</span>
+                <select
+                  value={selectedAspectType}
+                  onChange={(e) => setSelectedAspectType(e.target.value)}
+                  className="w-full bg-neutral-900 border border-white/10 rounded px-2.5 py-2 text-gray-200 focus:border-terminal-accent outline-none cursor-pointer uppercase font-bold"
+                >
+                  <option value="ALL">ALL ASPECTS</option>
+                  {uniqueAspectTypes.map(aspect => (
+                    <option key={aspect} value={aspect}>{aspect.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Time Frame Filter */}
+              <div className="space-y-1">
+                <span className="text-[9px] text-gray-500 uppercase font-black block">Time Frame:</span>
+                <select
+                  value={timeFilter}
+                  onChange={(e) => setTimeFilter(e.target.value as any)}
+                  className="w-full bg-neutral-900 border border-white/10 rounded px-2.5 py-2 text-gray-200 focus:border-terminal-accent outline-none cursor-pointer uppercase font-bold"
+                >
+                  <option value="ALL">ALL DATES</option>
+                  <option value="UPCOMING">UPCOMING DATES</option>
+                  <option value="PAST">PAST DATES</option>
+                </select>
+              </div>
+
+              {/* Text Search filter */}
+              <div className="space-y-1">
+                <span className="text-[9px] text-gray-500 uppercase font-black block">Search Keywords:</span>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search gold, degree, etc..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-neutral-900 border border-white/10 rounded pl-8 pr-2.5 py-2 text-xs text-white placeholder-gray-600 focus:border-terminal-accent outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Split Logs Grid Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2 flex-1">
+              
+              {/* Logs List Panel (7 Columns) */}
+              <div className="lg:col-span-7 flex flex-col space-y-3.5 h-[500px]">
+                <div className="text-[10px] font-mono text-gray-500 uppercase tracking-wider border-b border-white/10 pb-1">
+                  CHRONOLOGICAL LOGS MATRIX
+                </div>
+
+                {filteredLogs.length === 0 ? (
+                  <div className="bg-black/40 border border-white/10 rounded-lg p-10 text-center text-xs text-gray-500 font-mono flex-1 flex items-center justify-center">
+                    No matching celestial alignments logged. Adjust filters above to expand query scope.
+                  </div>
+                ) : (
+                  <div className="space-y-2 overflow-y-auto pr-1 flex-1">
+                    {filteredLogs.map((aspect) => {
+                      const isSelected = selectedTransit?.id === aspect.id;
+
+                      return (
+                        <div
+                          key={aspect.id}
+                          onClick={() => setSelectedTransit(aspect)}
+                          className={`p-3 rounded-lg border transition-all cursor-pointer text-left flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isSelected 
+                              ? "bg-terminal-accent/10 border-terminal-accent/60 shadow-[0_0_12px_rgba(234,179,8,0.06)]" 
+                              : "bg-black/30 border-white/5 hover:border-white/20 hover:bg-black/40"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="bg-white/5 border border-white/5 rounded px-2 py-1 flex items-center space-x-1 shrink-0">
+                              <span className="text-sm font-serif text-white">{aspect.planet1Symbol}</span>
+                              <span className="text-[10px] text-gray-500">{aspect.aspectSymbol}</span>
+                              <span className="text-sm font-serif text-white">{aspect.planet2Symbol}</span>
+                            </div>
+                            
+                            <div>
+                              <span className="text-xs font-mono font-bold text-gray-200 uppercase block leading-snug">
+                                {aspect.planet1} {aspect.aspectType} {aspect.planet2}
+                              </span>
+                              <div className="flex items-center space-x-2 text-[10px] text-gray-500 mt-0.5">
+                                <span>{formatDisplayDate(aspect.date)}</span>
+                                <span>•</span>
+                                <span className="text-terminal-accent font-bold">{aspect.degree} Axis</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-2.5 self-end sm:self-center">
+                            {astroAiRun && (
+                              <span className={`text-[8px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider ${
+                                aspect.strength === "HIGH" 
+                                  ? "bg-terminal-red/10 border-terminal-red/20 text-terminal-red font-bold"
+                                  : aspect.strength === "MEDIUM"
+                                  ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                                  : "bg-sky-500/10 border-sky-500/20 text-sky-400"
+                              }`}>
+                                {aspect.strength} IMPACT
+                              </span>
+                            )}
+
+                            <ChevronRight className={`w-3.5 h-3.5 transition-transform ${
+                              isSelected ? "text-terminal-accent translate-x-0.5" : "text-gray-600"
+                            }`} />
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Details Sidebar Panel (5 Columns) */}
+              <div className="lg:col-span-5 h-[500px] flex flex-col">
+                <div className="text-[10px] font-mono text-gray-500 uppercase tracking-wider border-b border-white/10 pb-1 mb-3.5">
+                  👁️ Alignment Intel & Backtest Projections
+                </div>
+
+                {selectedTransit ? (
+                  <div className="bg-white/[0.01] border border-white/5 rounded-xl p-4.5 space-y-4 font-mono animate-fadeIn relative overflow-hidden flex-1 flex flex-col justify-between">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-terminal-accent/5 rounded-full blur-2xl pointer-events-none" />
+                    
+                    <div className="flex items-center justify-between border-b border-white/[0.04] pb-3 shrink-0">
+                      <div className="flex items-center space-x-2">
+                        <div className="bg-terminal-accent/15 p-2 rounded-lg border border-terminal-accent/20">
+                          <span className="text-terminal-accent text-base font-black">{selectedTransit.planet1Symbol}</span>
+                        </div>
+                        <div className="text-xl font-black text-white">{selectedTransit.planet1.toUpperCase()}</div>
                       </div>
-
-                      <div className="flex items-center space-x-2.5 self-end sm:self-center">
-                        {astroAiRun && (
-                          <span className={`text-[8px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider ${
-                            aspect.strength === "HIGH" 
-                              ? "bg-terminal-red/10 border-terminal-red/20 text-terminal-red font-bold"
-                              : aspect.strength === "MEDIUM"
-                              ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                              : "bg-sky-500/10 border-sky-500/20 text-sky-400"
-                          }`}>
-                            {aspect.strength} IMPACT
-                          </span>
-                        )}
-
-                        <ChevronRight className={`w-3.5 h-3.5 transition-transform ${
-                          isSelected ? "text-terminal-accent translate-x-0.5" : "text-gray-600"
-                        }`} />
+                      <div className="text-gray-500 text-sm font-black">{selectedTransit.aspectSymbol}</div>
+                      <div className="flex items-center space-x-2">
+                        <div className="text-xl font-black text-white">{selectedTransit.planet2.toUpperCase()}</div>
+                        <div className="bg-terminal-accent/15 p-2 rounded-lg border border-terminal-accent/20">
+                          <span className="text-terminal-accent text-base font-black">{selectedTransit.planet2Symbol}</span>
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            ).props.children}
-          </div>
 
-          {/* Details Sidebar Panel (5 Columns) */}
-          <div className="lg:col-span-5">
-            <div className="text-[10px] font-mono text-gray-500 uppercase tracking-wider border-b border-white/5 pb-1 mb-3.5">
-              👁️ Alignment Intel & Backtest Projections
+                    <div className="grid grid-cols-2 gap-3 text-[10px] shrink-0">
+                      <div className="bg-black/30 p-2.5 rounded-lg border border-white/5">
+                        <span className="text-gray-500 text-[8px] uppercase block">Alignment Date</span>
+                        <span className="text-white font-bold block mt-0.5">{formatDisplayDate(selectedTransit.date)}</span>
+                      </div>
+                      <div className="bg-black/30 p-2.5 rounded-lg border border-white/5">
+                        <span className="text-gray-500 text-[8px] uppercase block">Exact Time (UTC)</span>
+                        <span className="text-white font-bold block mt-0.5">{selectedTransit.time}</span>
+                      </div>
+                      <div className="bg-black/30 p-2.5 rounded-lg border border-white/5">
+                        <span className="text-gray-500 text-[8px] uppercase block">Aspect Degree</span>
+                        <span className="text-terminal-accent font-black block mt-0.5">{selectedTransit.degree}</span>
+                      </div>
+                      <div className="bg-black/30 p-2.5 rounded-lg border border-white/5">
+                        <span className="text-gray-500 text-[8px] uppercase block">Aspect Formula</span>
+                        <span className="text-indigo-400 font-extrabold block mt-0.5">{selectedTransit.aspectType}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-black/40 border border-white/5 rounded-lg p-3.5 space-y-2 flex-1 overflow-y-auto min-h-0 mt-3 mb-3">
+                      <div className="flex items-center justify-between text-[9px] font-bold text-terminal-accent uppercase tracking-widest">
+                        <span>Market Catalyst Profile</span>
+                        {astroAiRun ? (
+                          <span className="text-[8px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded font-black uppercase">AI Assisted</span>
+                        ) : (
+                          <span className="text-[8px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded uppercase">Baseline</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-300 leading-relaxed italic">
+                        "{selectedTransit.marketImpact}"
+                      </p>
+                    </div>
+
+                    {/* Backtest Statistics Component */}
+                    <div className="bg-terminal-accent/[0.02] border border-terminal-accent/10 rounded-lg p-3 space-y-2.5 shrink-0">
+                      <span className="text-[9px] font-bold text-white uppercase tracking-wider block">Historical Index Reversal Probability</span>
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[9px] text-gray-400">
+                          <span>Nifty 50 Pivot Success (30y backtest)</span>
+                          <span className="font-extrabold text-white">76.4%</span>
+                        </div>
+                        <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                          <div className="bg-gradient-to-r from-terminal-accent to-emerald-400 h-1.5 rounded-full" style={{ width: "76.4%" }}></div>
+                        </div>
+                      </div>
+                      <p className="text-[8px] text-gray-500 leading-relaxed">
+                        *Orb influence is active +/- 1.5 days around exact degree contact. High probability for sharp counter-trend acceleration triggers on indices.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 bg-white/[0.01] border border-white/5 rounded-xl flex flex-col items-center justify-center p-8 text-center text-gray-500 font-mono">
+                    <Calendar className="w-10 h-10 text-white/5 mb-3" />
+                    <span className="text-xs">Select an alignment from the matrix to view specialized backtest stats and catalyst profiles.</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {selectedTransit ? (
-              <div className="bg-white/[0.01] border border-white/5 rounded-xl p-4.5 space-y-4 font-mono animate-fadeIn relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-terminal-accent/5 rounded-full blur-2xl pointer-events-none" />
-                
-                <div className="flex items-center justify-between border-b border-white/[0.04] pb-3">
-                  <div className="flex items-center space-x-2">
-                    <div className="bg-terminal-accent/15 p-2 rounded-lg border border-terminal-accent/20">
-                      <span className="text-terminal-accent text-base font-black">{selectedTransit.planet1Symbol}</span>
-                    </div>
-                    <div className="text-xl font-black text-white">{selectedTransit.planet1.toUpperCase()}</div>
-                  </div>
-                  <div className="text-gray-500 text-sm font-black">{selectedTransit.aspectSymbol}</div>
-                  <div className="flex items-center space-x-2">
-                    <div className="text-xl font-black text-white">{selectedTransit.planet2.toUpperCase()}</div>
-                    <div className="bg-terminal-accent/15 p-2 rounded-lg border border-terminal-accent/20">
-                      <span className="text-terminal-accent text-base font-black">{selectedTransit.planet2Symbol}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-[10px]">
-                  <div className="bg-black/30 p-2.5 rounded-lg border border-white/5">
-                    <span className="text-gray-500 text-[8px] uppercase block">Alignment Date</span>
-                    <span className="text-white font-bold block mt-0.5">{formatDisplayDate(selectedTransit.date)}</span>
-                  </div>
-                  <div className="bg-black/30 p-2.5 rounded-lg border border-white/5">
-                    <span className="text-gray-500 text-[8px] uppercase block">Exact Time (UTC)</span>
-                    <span className="text-white font-bold block mt-0.5">{selectedTransit.time}</span>
-                  </div>
-                  <div className="bg-black/30 p-2.5 rounded-lg border border-white/5">
-                    <span className="text-gray-500 text-[8px] uppercase block">Aspect Degree</span>
-                    <span className="text-terminal-accent font-black block mt-0.5">{selectedTransit.degree}</span>
-                  </div>
-                  <div className="bg-black/30 p-2.5 rounded-lg border border-white/5">
-                    <span className="text-gray-500 text-[8px] uppercase block">Aspect Formula</span>
-                    <span className="text-indigo-400 font-extrabold block mt-0.5">{selectedTransit.aspectType}</span>
-                  </div>
-                </div>
-
-                <div className="bg-black/40 border border-white/5 rounded-lg p-3.5 space-y-2">
-                  <div className="flex items-center justify-between text-[9px] font-bold text-terminal-accent uppercase tracking-widest">
-                    <span>Market Catalyst Profile</span>
-                    {astroAiRun ? (
-                      <span className="text-[8px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded font-black uppercase">AI Assisted</span>
-                    ) : (
-                      <span className="text-[8px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded uppercase">Baseline</span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-gray-300 leading-relaxed italic">
-                    "{selectedTransit.marketImpact}"
-                  </p>
-                </div>
-
-                {/* Backtest Statistics Component */}
-                <div className="bg-terminal-accent/[0.02] border border-terminal-accent/10 rounded-lg p-3 space-y-2.5">
-                  <span className="text-[9px] font-bold text-white uppercase tracking-wider block">Historical Index Reversal Probability</span>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-[9px] text-gray-400">
-                      <span>Nifty 50 Pivot Success (30y backtest)</span>
-                      <span className="font-extrabold text-white">76.4%</span>
-                    </div>
-                    <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                      <div className="bg-gradient-to-r from-terminal-accent to-emerald-400 h-1.5 rounded-full" style={{ width: "76.4%" }}></div>
-                    </div>
-                  </div>
-                  <p className="text-[8px] text-gray-500 leading-relaxed">
-                    *Orb influence is active +/- 1.5 days around exact degree contact. High probability for sharp counter-trend acceleration triggers on indices.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="h-[380px] bg-white/[0.01] border border-white/5 rounded-xl flex flex-col items-center justify-center p-8 text-center text-gray-500 font-mono">
-                <Calendar className="w-10 h-10 text-white/5 mb-3" />
-                <span className="text-xs">No aspects match current search or filters. Adjust query to load data.</span>
-              </div>
-            )}
-          </div>
-
-        </div>
-
-      </div>
+            {/* Footer with a quick back action */}
+            <div className="border-t border-white/10 pt-4 flex justify-between items-center text-[9px] text-gray-500">
+              <span>PLANETARY ALIGNMENTS MATRIX • HISTORIC BACKTEST LAYER</span>
+              <button
+                onClick={() => setIsExplorerOpen(false)}
+                className="bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 px-3 py-1 rounded cursor-pointer transition-all"
+              >
+                CLOSE EXPLORER
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

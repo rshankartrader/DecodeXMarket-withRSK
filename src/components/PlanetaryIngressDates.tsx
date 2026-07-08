@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Compass, 
   Calendar, 
@@ -14,7 +15,8 @@ import {
   Database,
   Copy,
   Check,
-  Sparkles
+  Sparkles,
+  ChevronRight
 } from "lucide-react";
 
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -227,6 +229,7 @@ export const parseCSVTextIngress = (csvText: string): IngressEvent[] => {
 };
 
 export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: boolean } = {}) {
+  const [isExplorerOpen, setIsExplorerOpen] = useState<boolean>(false);
   const [ingressData, setIngressData] = useState<IngressEvent[]>(() => {
     const saved = localStorage.getItem("planetary_ingress_custom_data");
     if (saved) {
@@ -988,163 +991,216 @@ function createJsonResponse(data) {
 
       </div>
 
-      {/* FILTER & EXPLORER PANEL */}
-      <div className="bg-white/[0.01] border border-white/5 rounded-lg p-5 font-mono space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-3">
-          <div className="space-y-1">
-            <span className="text-xs font-bold text-white uppercase flex items-center">
-              <Calendar className="w-4 h-4 text-terminal-accent mr-1.5" />
-              INGRESS TRANSIT CALENDAR & LOGS
-            </span>
-            <p className="text-[10px] text-gray-500">Track precise transition dates, times, and zodiac signs along with direct market cycle implications.</p>
+      {/* FILTER & EXPLORER PANEL PREVIEW */}
+      <div className="bg-gradient-to-b from-white/[0.01] to-transparent border border-white/5 rounded-xl p-6 font-mono text-center space-y-4">
+        <div className="flex flex-col items-center space-y-2 max-w-lg mx-auto">
+          <div className="bg-terminal-accent/10 border border-terminal-accent/20 p-3 rounded-full">
+            <Calendar className="w-6 h-6 text-terminal-accent animate-pulse" />
           </div>
-
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Run Astro AI button */}
-            {ingressData.length > 0 && (
-              <button
-                type="button"
-                disabled={isAstroAiLoading}
-                onClick={handleRunAstroAi}
-                className="bg-terminal-accent/10 hover:bg-terminal-accent/25 border border-terminal-accent/30 text-terminal-accent px-2.5 py-1.5 rounded text-[10px] flex items-center space-x-1 cursor-pointer transition-all uppercase font-bold disabled:opacity-50"
-              >
-                {isAstroAiLoading ? (
-                  <span className="w-3 h-3 border-2 border-terminal-accent border-t-transparent rounded-full animate-spin"></span>
-                ) : (
-                  <Sparkles className="w-3 h-3 text-terminal-accent" />
-                )}
-                <span>{astroAiRun ? "ASTRO AI ACTIVE" : "RUN ASTRO AI"}</span>
-              </button>
-            )}
-
-            {/* Search */}
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-2">
-                <Search className="w-3.5 h-3.5 text-gray-500" />
-              </span>
-              <input
-                type="text"
-                value={rawSearchText}
-                onChange={(e) => setRawSearchText(e.target.value)}
-                placeholder="Search transit..."
-                className="bg-terminal-bg border border-terminal-border rounded pl-7 pr-3 py-1.5 text-[10px] text-white focus:border-terminal-accent outline-none font-mono placeholder-gray-600 w-36 md:w-44"
-              />
-            </div>
-
-            {/* Planet Filter */}
-            <div className="space-y-0.5">
-              <select
-                value={selectedPlanet}
-                onChange={(e) => setSelectedPlanet(e.target.value)}
-                className="bg-terminal-bg border border-terminal-border rounded p-1.5 text-[10px] text-white focus:border-terminal-accent outline-none font-mono cursor-pointer"
-              >
-                <option value="ALL">ALL PLANETS</option>
-                {planetsList.map((p) => (
-                  <option key={p} value={p}>{p.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Past/Upcoming Time Filter */}
-            <div className="flex bg-terminal-bg border border-terminal-border rounded p-0.5">
-              {(["ALL", "UPCOMING", "PAST"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setTimeFilter(mode)}
-                  className={`px-2.5 py-1 rounded text-[9px] font-black transition-all ${
-                    timeFilter === mode 
-                      ? "bg-terminal-accent text-white" 
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-
-            {/* Year Selector */}
-            <div className="flex bg-terminal-bg border border-terminal-border rounded p-0.5 flex-wrap max-h-16 overflow-y-auto">
-              {yearsList.map((y) => (
-                <button
-                  key={y}
-                  onClick={() => setSelectedYear(y)}
-                  className={`px-2 py-1 rounded text-[9px] font-black transition-all ${
-                    selectedYear === y 
-                      ? "bg-terminal-accent text-white" 
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  {y}
-                </button>
-              ))}
-            </div>
-          </div>
+          <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+            INGRESS TRANSIT CALENDAR & LOGS
+          </h4>
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            Track precise transition dates, times, and zodiac signs along with direct market cycle implications. Integrate with Google Sheets real-time synchronization pipelines.
+          </p>
         </div>
+        
+        <button
+          onClick={() => setIsExplorerOpen(true)}
+          className="mx-auto bg-terminal-accent/15 hover:bg-terminal-accent/30 border border-terminal-accent/30 hover:border-terminal-accent/50 text-terminal-accent text-[11px] font-black uppercase px-6 py-2.5 rounded transition-all tracking-wider flex items-center space-x-2 cursor-pointer shadow-lg hover:shadow-terminal-accent/5"
+        >
+          <span>VIEW ALL INGRESS LOGS</span>
+          <ChevronRight className="w-3.5 h-3.5 text-terminal-accent" />
+        </button>
+      </div>
 
-        {filteredIngress.length > 0 ? (
-          <div className="overflow-x-auto overflow-y-auto rounded-lg border border-white/5 max-h-[280px] md:max-h-none scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-            <table className="min-w-[650px] md:min-w-full w-full text-left border-collapse sm:text-[10px] text-[8.5px]">
-              <thead>
-                <tr className="bg-white/5 text-gray-400 border-b border-white/5">
-                  <th className="sm:p-2.5 p-1.5 font-bold uppercase">Planet</th>
-                  <th className="sm:p-2.5 p-1.5 font-bold uppercase">Sign (Ingress)</th>
-                  <th className="sm:p-2.5 p-1.5 font-bold uppercase">Transit Date</th>
-                  <th className="sm:p-2.5 p-1.5 font-bold uppercase">Transition Time</th>
-                  <th className="sm:p-2.5 p-1.5 font-bold uppercase">Systemic & Market Cycle Implications</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredIngress.map((item, idx) => {
-                  const itemD = new Date(item.date);
-                  const isPast = itemD < today;
-                  const isCurrent = item.date === todayStr;
+      <AnimatePresence>
+        {isExplorerOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/98 backdrop-blur-xl p-6 md:p-10 font-mono flex flex-col space-y-6"
+          >
+            {/* Header / Nav bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
+              <div className="space-y-1">
+                <button
+                  onClick={() => setIsExplorerOpen(false)}
+                  className="flex items-center text-[10px] font-bold text-gray-400 hover:text-terminal-accent uppercase tracking-wider mb-2 transition-colors cursor-pointer group"
+                >
+                  <span className="mr-1 group-hover:-translate-x-0.5 transition-transform">←</span> BACK TO MAIN DASHBOARD
+                </button>
+                <h2 className="text-sm font-black text-white uppercase flex items-center tracking-widest">
+                  <Calendar className="w-5 h-5 text-terminal-accent mr-2 animate-pulse" />
+                  INGRESS TRANSIT CALENDAR & LOGS
+                </h2>
+                <p className="text-[10px] text-gray-500 font-mono">
+                  Track planetary transitions into different zodiac signs paired with direct market implications.
+                </p>
+              </div>
 
-                  return (
-                    <tr 
-                      key={idx} 
-                      className={`border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors ${
-                        isCurrent 
-                           ? "bg-terminal-accent/[0.02] border-l-2 border-l-terminal-accent" 
-                          : isPast 
-                            ? "opacity-60" 
-                            : "bg-white/[0.005]"
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Run Astro AI button */}
+                {ingressData.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={isAstroAiLoading}
+                    onClick={handleRunAstroAi}
+                    className="bg-terminal-accent/15 hover:bg-terminal-accent/30 border border-terminal-accent/30 text-terminal-accent px-3 py-2 rounded text-[10px] flex items-center space-x-1.5 cursor-pointer transition-all uppercase font-bold disabled:opacity-50"
+                  >
+                    {isAstroAiLoading ? (
+                      <span className="w-3.5 h-3.5 border-2 border-terminal-accent border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-terminal-accent" />
+                    )}
+                    <span>{astroAiRun ? "ASTRO AI ACTIVE" : "RUN ASTRO AI ENRICHMENT"}</span>
+                  </button>
+                )}
+
+                {/* Search */}
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-2.5">
+                    <Search className="w-3.5 h-3.5 text-gray-500" />
+                  </span>
+                  <input
+                    type="text"
+                    value={rawSearchText}
+                    onChange={(e) => setRawSearchText(e.target.value)}
+                    placeholder="Search transit..."
+                    className="bg-neutral-900 border border-white/10 rounded pl-8 pr-3 py-2 text-[10px] text-white focus:border-terminal-accent outline-none font-mono placeholder-gray-600 w-44"
+                  />
+                </div>
+
+                {/* Planet Filter */}
+                <select
+                  value={selectedPlanet}
+                  onChange={(e) => setSelectedPlanet(e.target.value)}
+                  className="bg-neutral-900 border border-white/10 rounded p-2 text-[10px] text-white focus:border-terminal-accent outline-none font-mono cursor-pointer"
+                >
+                  <option value="ALL">ALL PLANETS</option>
+                  {planetsList.map((p) => (
+                    <option key={p} value={p}>{p.toUpperCase()}</option>
+                  ))}
+                </select>
+
+                {/* Past/Upcoming Time Filter */}
+                <div className="flex bg-neutral-900 border border-white/10 rounded p-0.5">
+                  {(["ALL", "UPCOMING", "PAST"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setTimeFilter(mode)}
+                      className={`px-2.5 py-1.5 rounded text-[9px] font-black transition-all ${
+                        timeFilter === mode 
+                          ? "bg-terminal-accent text-white" 
+                          : "text-gray-400 hover:text-white"
                       }`}
                     >
-                      <td className="sm:p-2.5 p-1.5 font-black text-white flex items-center space-x-1.5">
-                        <span className="text-terminal-accent text-xs">{item.symbol}</span>
-                        <span>{item.planet}</span>
-                        {isCurrent && (
-                          <span className="text-[7px] font-black bg-terminal-accent/20 text-terminal-accent px-1 rounded animate-pulse">TODAY</span>
-                        )}
-                      </td>
-                      <td className="sm:p-2.5 p-1.5 font-bold text-gray-300">
-                        <span className="text-terminal-accent mr-1 font-mono">{item.signSymbol}</span>
-                        {item.sign}
-                      </td>
-                      <td className="sm:p-2.5 p-1.5 font-bold text-gray-300">{formatDisplayDate(item.date)}</td>
-                      <td className="sm:p-2.5 p-1.5 font-mono text-gray-400">{item.time}</td>
-                      <td className="sm:p-2.5 p-1.5 text-gray-400 sm:text-[9px] text-[8px] italic leading-relaxed whitespace-normal break-words max-w-[200px] md:max-w-none">
-                        {astroAiRun && (
-                          <span className="inline-flex items-center space-x-1 text-[7.5px] bg-purple-950/40 text-purple-400 border border-purple-500/20 px-1 py-0.5 rounded font-bold uppercase tracking-tight mr-1.5 not-italic select-none">
-                            <Sparkles className="w-2 h-2 text-purple-400 shrink-0" />
-                            <span>Astro AI</span>
-                          </span>
-                        )}
-                        {item.marketImpact}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="p-8 text-center bg-white/[0.01] border border-white/5 rounded-lg text-xs text-gray-500 leading-relaxed">
-            No ingress transits matching the selected filters found in {selectedYear}. Direct transit orbits dominate this cycle.
-          </div>
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Year Selector */}
+                <div className="flex bg-neutral-900 border border-white/10 rounded p-0.5 flex-wrap max-h-16 overflow-y-auto">
+                  {yearsList.map((y) => (
+                    <button
+                      key={y}
+                      onClick={() => setSelectedYear(y)}
+                      className={`px-2 py-1 rounded text-[9px] font-black transition-all ${
+                        selectedYear === y 
+                          ? "bg-terminal-accent text-white" 
+                          : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Main Full Page Content */}
+            <div className="flex-1 space-y-6">
+              {filteredIngress.length > 0 ? (
+                <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/40">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="bg-white/5 text-gray-400 border-b border-white/10">
+                        <th className="p-3.5 font-bold uppercase">Planet</th>
+                        <th className="p-3.5 font-bold uppercase">Sign (Ingress)</th>
+                        <th className="p-3.5 font-bold uppercase">Transit Date</th>
+                        <th className="p-3.5 font-bold uppercase">Transition Time</th>
+                        <th className="p-3.5 font-bold uppercase">Systemic & Market Cycle Implications</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredIngress.map((item, idx) => {
+                        const itemD = new Date(item.date);
+                        const isPast = itemD < today;
+                        const isCurrent = item.date === todayStr;
+
+                        return (
+                          <tr 
+                            key={idx} 
+                            className={`border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors ${
+                              isCurrent 
+                                 ? "bg-terminal-accent/[0.04] border-l-2 border-l-terminal-accent" 
+                                : isPast 
+                                  ? "opacity-60" 
+                                  : "bg-white/[0.01]"
+                            }`}
+                          >
+                            <td className="p-3.5 font-black text-white flex items-center space-x-1.5">
+                              <span className="text-terminal-accent text-xs">{item.symbol}</span>
+                              <span>{item.planet}</span>
+                              {isCurrent && (
+                                <span className="text-[7px] font-black bg-terminal-accent/20 text-terminal-accent px-1 rounded animate-pulse">TODAY</span>
+                              )}
+                            </td>
+                            <td className="p-3.5 font-bold text-gray-300">
+                              <span className="text-terminal-accent mr-1 font-mono">{item.signSymbol}</span>
+                              {item.sign}
+                            </td>
+                            <td className="p-3.5 font-bold text-gray-300">{formatDisplayDate(item.date)}</td>
+                            <td className="p-3.5 font-mono text-gray-400">{item.time}</td>
+                            <td className="p-3.5 text-gray-400 text-[10px] italic leading-relaxed">
+                              {astroAiRun && (
+                                <span className="inline-flex items-center space-x-1 text-[7.5px] bg-purple-950/40 text-purple-400 border border-purple-500/20 px-1 py-0.5 rounded font-bold uppercase tracking-tight mr-1.5 not-italic select-none">
+                                  <Sparkles className="w-2 h-2 text-purple-400 shrink-0" />
+                                  <span>Astro AI</span>
+                                </span>
+                              )}
+                              {item.marketImpact}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-12 text-center bg-white/[0.01] border border-white/5 rounded-lg text-xs text-gray-500 leading-relaxed font-mono">
+                  No ingress transits matching the selected filters found in {selectedYear}. Direct transit orbits dominate this cycle.
+                </div>
+              )}
+            </div>
+
+            {/* Footer with a quick back action */}
+            <div className="border-t border-white/10 pt-4 flex justify-between items-center text-[9px] text-gray-500">
+              <span>INGRESS TRANSIT MATRIX • SYNCHRONIZED LAYER</span>
+              <button
+                onClick={() => setIsExplorerOpen(false)}
+                className="bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 px-3 py-1 rounded cursor-pointer transition-all"
+              >
+                CLOSE EXPLORER
+              </button>
+            </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }

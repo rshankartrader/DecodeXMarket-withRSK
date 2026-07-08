@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from "lucide-react";
 
 interface ReversalWindow {
@@ -683,9 +684,11 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
       }
     }
 
-    const sim = getHistoricalPrice(selectedInstrument, date);
+    // Strictly disable simulated pricing fallback per user preference
     return {
-      ...sim,
+      high: null as number | null,
+      low: null as number | null,
+      close: null as number | null,
       isReal: false
     };
   };
@@ -733,26 +736,6 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
     };
   };
 
-  // Fetch trading days in the range (inclusive, skipping weekends)
-  const getTradingDaysInRange = (start: Date, end: Date) => {
-    const days: Date[] = [];
-    const current = new Date(start.getTime());
-    const limit = new Date(end.getTime());
-
-    current.setHours(0, 0, 0, 0);
-    limit.setHours(0, 0, 0, 0);
-
-    let guard = 0;
-    while (current.getTime() <= limit.getTime() && guard < 50) {
-      if (!isWeekend(current)) {
-        days.push(new Date(current.getTime()));
-      }
-      current.setDate(current.getDate() + 1);
-      guard++;
-    }
-    return days;
-  };
-
   const getCalendarDays = (start: Date, end: Date) => {
     const list: Date[] = [];
     const current = new Date(start.getTime());
@@ -767,53 +750,6 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
       guard++;
     }
     return list;
-  };
-
-  // High-fidelity historical price generator for the backtest targets
-  const getHistoricalPrice = (instrument: string, date: Date) => {
-    const seedStr = `${instrument}-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    let hash = 0;
-    for (let i = 0; i < seedStr.length; i++) {
-      hash = seedStr.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const rand = Math.abs(Math.sin(hash)) * 100;
-
-    let basePrice = 1500;
-    let volatility = 100;
-
-    const upperInst = instrument.trim().toUpperCase();
-    if (upperInst === "NIFTY 50") {
-      basePrice = 23500;
-      volatility = 180;
-    } else if (upperInst === "BANKNIFTY") {
-      basePrice = 50800;
-      volatility = 450;
-    } else if (upperInst === "SENSEX") {
-      basePrice = 77200;
-      volatility = 600;
-    } else {
-      // Dynamic fallback base price based on a basic hash of the name for Indian stocks
-      let charSum = 0;
-      for (let i = 0; i < upperInst.length; i++) {
-        charSum += upperInst.charCodeAt(i);
-      }
-      basePrice = (charSum % 8) * 450 + 350; // Dynamic fallback base between 350 and 3500
-      volatility = basePrice * 0.03; // 3% volatility fallback
-    }
-
-    const dayOffset = (date.getTime() - new Date(2026, 0, 1).getTime()) / 86400000;
-    const trend = dayOffset * 0.8;
-
-    const mid = basePrice + trend + (rand - 50) * (volatility / 50);
-    const high = mid + (rand % 10) * (volatility / 80);
-    const low = mid - ((rand + 5) % 10) * (volatility / 80);
-    const close = (high + low) / 2;
-
-    return {
-      high: parseFloat(high.toFixed(2)),
-      low: parseFloat(low.toFixed(2)),
-      close: parseFloat(close.toFixed(2))
-    };
   };
 
   const formatDateTime = (date: Date) => {
@@ -1895,14 +1831,18 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
                             {date.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" })}
                           </span>
                           <span className="text-[8px] uppercase tracking-wider">
-                            {isWknd ? "Weekend (Skip)" : isActive ? (price.isReal ? "Verified Live Feed" : "Simulated Rate") : "Hours Out (Skip)"}
+                            {isWknd ? "Weekend (Skip)" : isActive ? (price.isReal ? "Verified Live Feed" : "Awaiting Data") : "Hours Out (Skip)"}
                           </span>
                         </div>
                         {isActive ? (
-                          <div className="text-right space-x-2">
-                            <span>H: <strong className="text-terminal-green">{price.high}</strong></span>
-                            <span>L: <strong className="text-terminal-red">{price.low}</strong></span>
-                          </div>
+                          price.isReal && price.high !== null ? (
+                            <div className="text-right space-x-2">
+                              <span>H: <strong className="text-terminal-green">{price.high}</strong></span>
+                              <span>L: <strong className="text-terminal-red">{price.low}</strong></span>
+                            </div>
+                          ) : (
+                            <span className="italic text-[9px] text-yellow-500/80">Pending Live Feed</span>
+                          )
                         ) : (
                           <span className="italic text-[9px]">Market Closed</span>
                         )}
@@ -1933,10 +1873,12 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
 
                 if (isActive) {
                   const price = getRealOrSimulatedPrice(selectedInstrument, date);
-                  if (price.high > panchakHigh) panchakHigh = price.high;
-                  if (price.low < panchakLow) panchakLow = price.low;
-                  if (price.isReal) isUsingRealData = true;
-                  activeCount++;
+                  if (price.isReal && price.high !== null && price.low !== null) {
+                    if (price.high > panchakHigh) panchakHigh = price.high;
+                    if (price.low < panchakLow) panchakLow = price.low;
+                    isUsingRealData = true;
+                    activeCount++;
+                  }
                 }
               });
 
@@ -1955,7 +1897,7 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
 
               return (
                 <div className="space-y-4 h-full flex flex-col justify-between">
-                  <div className="space-y-3.5">
+                  <div className="space-y-3.5 w-full">
                     <div className="flex items-center justify-between border-b border-white/5 pb-2">
                       <span className="text-xs font-bold text-white font-mono uppercase flex items-center">
                         <Compass className="w-3.5 h-3.5 text-terminal-accent mr-1.5" />
@@ -1964,74 +1906,87 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
                       <span className={`text-[8px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
                         isUsingRealData 
                           ? "bg-terminal-green/10 text-terminal-green border border-terminal-green/20" 
-                          : "bg-yellow-400/10 text-yellow-500 border border-yellow-500/20"
+                          : "bg-red-500/10 text-red-500 border border-red-500/20"
                       }`}>
-                        {isUsingRealData ? "LIVE FEED ACTIVE" : "SIMULATED FEED"}
+                        {isUsingRealData ? "LIVE FEED ACTIVE" : "LIVE FEED INACTIVE"}
                       </span>
                     </div>
 
-                    {/* Extracted Stats Banner */}
-                    <div className="grid grid-cols-3 gap-2 bg-black/40 p-2.5 rounded border border-white/5 font-mono text-[10px]">
-                      <div className="text-center">
-                        <span className="text-gray-500 uppercase text-[8px] block">Panchak High</span>
-                        <span className="font-bold text-terminal-green text-xs">{panchakHigh || "N/A"}</span>
+                    {!isUsingRealData ? (
+                      <div className="bg-red-500/5 border border-red-500/10 rounded p-4 font-mono text-[10px] space-y-2 text-center my-6">
+                        <AlertTriangle className="w-6 h-6 text-red-500 mx-auto animate-pulse" />
+                        <p className="text-white font-bold uppercase tracking-wider">Simulated Rates Disabled</p>
+                        <p className="text-gray-400 text-[9px] leading-relaxed">
+                          Awaiting real-time market historical data feed for this Panchak window. 
+                          Simulated pricing has been strictly disabled to ensure institutional-grade precision.
+                        </p>
                       </div>
-                      <div className="text-center border-x border-white/5">
-                        <span className="text-gray-500 uppercase text-[8px] block">Panchak Low</span>
-                        <span className="font-bold text-terminal-red text-xs">{panchakLow || "N/A"}</span>
-                      </div>
-                      <div className="text-center">
-                        <span className="text-gray-500 uppercase text-[8px] block">Target Range</span>
-                        <span className="font-bold text-terminal-accent text-xs">{range || "N/A"}</span>
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        {/* Extracted Stats Banner */}
+                        <div className="grid grid-cols-3 gap-2 bg-black/40 p-2.5 rounded border border-white/5 font-mono text-[10px]">
+                          <div className="text-center">
+                            <span className="text-gray-500 uppercase text-[8px] block">Panchak High</span>
+                            <span className="font-bold text-terminal-green text-xs">{panchakHigh || "N/A"}</span>
+                          </div>
+                          <div className="text-center border-x border-white/5">
+                            <span className="text-gray-500 uppercase text-[8px] block">Panchak Low</span>
+                            <span className="font-bold text-terminal-red text-xs">{panchakLow || "N/A"}</span>
+                          </div>
+                          <div className="text-center">
+                            <span className="text-gray-500 uppercase text-[8px] block">Target Range</span>
+                            <span className="font-bold text-terminal-accent text-xs">{range || "N/A"}</span>
+                          </div>
+                        </div>
 
-                    {/* Projections Targets list */}
-                    <div className="space-y-3">
-                      {/* Bullish Breakout Section */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-[9px] font-mono text-terminal-green font-bold uppercase">
-                          <span>Bullish Reversals / Targets</span>
-                          <span>Trigger: &gt; {panchakHigh}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
-                            <span className="text-[8px] font-mono text-gray-500 block">T1 (61%)</span>
-                            <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp1}</span>
+                        {/* Projections Targets list */}
+                        <div className="space-y-3">
+                          {/* Bullish Breakout Section */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] font-mono text-terminal-green font-bold uppercase">
+                              <span>Bullish Reversals / Targets</span>
+                              <span>Trigger: &gt; {panchakHigh}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
+                                <span className="text-[8px] font-mono text-gray-500 block">T1 (61%)</span>
+                                <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp1}</span>
+                              </div>
+                              <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
+                                <span className="text-[8px] font-mono text-gray-500 block">T2 (138%)</span>
+                                <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp2}</span>
+                              </div>
+                              <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
+                                <span className="text-[8px] font-mono text-gray-500 block">T3 (200%)</span>
+                                <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp3}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
-                            <span className="text-[8px] font-mono text-gray-500 block">T2 (138%)</span>
-                            <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp2}</span>
-                          </div>
-                          <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
-                            <span className="text-[8px] font-mono text-gray-500 block">T3 (200%)</span>
-                            <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp3}</span>
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Bearish Breakout Section */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-[9px] font-mono text-terminal-red font-bold uppercase">
-                          <span>Bearish Reversals / Targets</span>
-                          <span>Trigger: &lt; {panchakLow}</span>
+                          {/* Bearish Breakout Section */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] font-mono text-terminal-red font-bold uppercase">
+                              <span>Bearish Reversals / Targets</span>
+                              <span>Trigger: &lt; {panchakLow}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
+                                <span className="text-[8px] font-mono text-gray-500 block">T1 (61%)</span>
+                                <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn1}</span>
+                              </div>
+                              <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
+                                <span className="text-[8px] font-mono text-gray-500 block">T2 (138%)</span>
+                                <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn2}</span>
+                              </div>
+                              <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
+                                <span className="text-[8px] font-mono text-gray-500 block">T3 (200%)</span>
+                                <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn3}</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
-                            <span className="text-[8px] font-mono text-gray-500 block">T1 (61%)</span>
-                            <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn1}</span>
-                          </div>
-                          <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
-                            <span className="text-[8px] font-mono text-gray-500 block">T2 (138%)</span>
-                            <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn2}</span>
-                          </div>
-                          <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
-                            <span className="text-[8px] font-mono text-gray-500 block">T3 (200%)</span>
-                            <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn3}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="mt-4 bg-white/5 p-3 rounded border border-white/5 text-[9px] text-gray-500 font-mono leading-relaxed">

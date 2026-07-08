@@ -254,7 +254,7 @@ export default function PlanetaryIngressDates({ isAdmin = false }: { isAdmin?: b
   });
   
   // Custom Google Sheets or Apps Script Web App source
-  const [customSourceUrl, setCustomSourceUrl] = useState<string>(() => localStorage.getItem("planetary_ingress_custom_url") || "");
+  const [customSourceUrl, setCustomSourceUrl] = useState<string>(() => localStorage.getItem("planetary_ingress_custom_url") || "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec");
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [inputUrl, setInputUrl] = useState<string>(() => localStorage.getItem("planetary_ingress_custom_url") || "https://script.google.com/macros/s/AKfycbxvfJv35_2d9TPoUoA5XvaYwI5zMpG6H5lpi0Vd-QorhvwcPCu6OzeUw0hhS4cgeJ7Tfg/exec");

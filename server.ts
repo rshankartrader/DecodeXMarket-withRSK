@@ -1159,20 +1159,51 @@ Format strictly using clean markdown headers, bullets, and bold text. Keep it fo
         summaryParts.push("No major celestial triggers are active today. The cosmic grid is in a neutral state, supporting steady consolidation.");
       }
 
+      // 1. TODAY'S COSMIC WINDOWS INTERPRETATION (short text)
+      const todayInterpretation = summaryParts.length > 0 
+        ? `Today's market dynamics are shaped by ${summaryParts.length} active celestial alignment(s). ` +
+          (cosmicWindows.activePanchak || cosmicWindows.activeAmavasya 
+            ? "Reversal pressures are currently elevated due to active Panchak/Amavasya structures, necessitating conservative position sizing." 
+            : "The current grid is moderately supportive of established intraday trends, guided by minor lunar/mercury alignments.")
+        : "The cosmic grid is completely quiet today, leading to neutral consolidations and low-volatility sideways range play.";
+
+      // 2. UPCOMING INGRESSES INTERPRETATION (short text)
+      let upcomingIngressInterpretation = "No major upcoming planetary sign entries detected in the immediate forecast window.";
+      if (cosmicWindows.upcomingIngresses && cosmicWindows.upcomingIngresses.length > 0) {
+        const ingressesText = cosmicWindows.upcomingIngresses.map((ing: any) => 
+          `**${ing.planet}** entering **${ing.sign}** on *${ing.date}* (${ing.marketImpact || "Sector rotation"})`
+        ).join(", ");
+        upcomingIngressInterpretation = `The near-term pipeline contains major sector-shifting ingresses: ${ingressesText}. Expect capital re-allocation across thematic indices as these transit dates approach.`;
+      }
+
+      // 3. UPCOMING TRANSITS INTERPRETATION (short text)
+      let upcomingTransitInterpretation = "No major upcoming transit aspects identified in the near-term ephemeris.";
+      if (cosmicWindows.upcomingAspects && cosmicWindows.upcomingAspects.length > 0) {
+        const transitsText = cosmicWindows.upcomingAspects.map((asp: any) => 
+          `**${asp.planet1}** ${asp.aspectType || "aspecting"} **${asp.planet2}** on *${asp.date}* (${asp.interpretation || "Trend shift"})`
+        ).join(", ");
+        upcomingTransitInterpretation = `Watch key incoming planetary alignments for exact intraday cycle turns: ${transitsText}. These geometric aspects represent high-probability support/resistance breakout levels.`;
+      }
+
       // Derive final biases based on scores
       const niftyBias = niftyScore > 0 ? "BULLISH" : niftyScore < -1 ? "BEARISH" : niftyScore === 0 ? "NEUTRAL" : "VOLATILE";
       const goldBias = goldScore > 1 ? "BULLISH" : goldScore < 0 ? "BEARISH" : goldScore === 0 ? "NEUTRAL" : "VOLATILE";
 
-      const reply = `### 🌌 Cosmic Alignment & Market Analysis
+      const reply = `### 🌌 Today's Cosmic Windows Interpretation
+${todayInterpretation}
 
-${summaryParts.map(p => `• ${p}`).join("\n")}
+### ☄️ Upcoming Ingresses Interpretation
+${upcomingIngressInterpretation}
+
+### ☉ Upcoming Transits & Aspects Interpretation
+${upcomingTransitInterpretation}
 
 ---
 
 ### 📊 Astro-Financial Market Bias
 
 #### 🇮🇳 Nifty 50: **${niftyBias}**
-The astrological indicators suggest a **${niftyBias.toLowerCase()}** outlook for Nifty 50. ${
+Outlook: **${niftyBias}**. ${
         niftyBias === "BULLISH" ? "Positive planetary ingress dates and supportive moon cycle coordinates favor short-term upward continuation." :
         niftyBias === "BEARISH" ? "Active Panchak/Amavasya structures suggest extreme trend-exhaustion. Keep tight stop-losses on long positions as reversal risks are highly elevated." :
         niftyBias === "VOLATILE" ? "The convergence of competing lunar and retrograde forces suggests dynamic, two-sided intraday volatility." :
@@ -1180,7 +1211,7 @@ The astrological indicators suggest a **${niftyBias.toLowerCase()}** outlook for
       }
 
 #### 🟡 Gold (XAU/USD): **${goldBias}**
-Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yellow metal. ${
+Outlook: **${goldBias}**. ${
         goldBias === "BULLISH" ? "As the metal of the Sun, Gold is highly favored today. Increased safe-haven seeking during volatile retrogrades/Panchak cycles supports steady accumulation." :
         goldBias === "BEARISH" ? "Lack of positive solar-venus aspects could lead to short-term profit-taking and technical consolidations." :
         "Gold prices are expected to remain tightly bound within existing geometric support levels, waiting for the next solar cycle ingress."
@@ -1213,18 +1244,26 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
       });
 
       const prompt = `You are "Astro AI", an elite-level Financial Astrologer, Gann cycle expert, and Technical Market Analyst.
-Your role is to analyze today's active cosmic windows and provide a professional-grade financial astrology market outlook.
-Determine and output the market bias (BULLISH, BEARISH, VOLATILE, or NEUTRAL) and structured technical commentary for both **Nifty 50 (Indian Equities)** and **Gold (XAU/USD)**.
+Your role is to analyze today's active cosmic windows, upcoming planetary sign ingresses, and upcoming transit aspects, and provide a professional-grade financial astrology market outlook.
 
-Here is today's active cosmic windows dataset:
+Here is today's active cosmic windows and upcoming celestial event dataset:
 ${JSON.stringify(cosmicWindows, null, 2)}
 
-You MUST:
-1. Provide a professional, elegant markdown response inside the "reply" key analyzing the cumulative celestial influence of the active cosmic windows today.
-2. Formulate highly specific astronomical justifications (referencing the active retrogrades, Panchak, active lunar cycle aspects, or active ingress signs) for Nifty 50 and Gold biases.
-3. Determine a specific bias for both instruments.
-4. Output your analysis in a valid JSON structure with exactly these keys:
-   - "reply": (string, highly detailed and beautifully structured markdown containing headers, list items, and clear bias rationale)
+You MUST formulate highly specific, concise, and scannable short text interpretations for:
+1. Today's active cosmic windows (including active moon/mercury alignments, active panchak, amavasya, active retrogrades, active ingress, or active aspect).
+2. Upcoming ingresses (interpreting the upcomingIngresses list in short texts).
+3. Upcoming transits & aspects (interpreting the upcomingAspects list in short texts).
+
+Output your response in a beautiful, structured markdown format inside the "reply" key. Use exactly these main headers:
+- "### 🌌 Today's Cosmic Windows Interpretation" (short, powerful paragraph)
+- "### ☄️ Upcoming Ingresses Interpretation" (short, powerful paragraph)
+- "### ☉ Upcoming Transits & Aspects Interpretation" (short, powerful paragraph)
+- "### 📊 Astro-Financial Market Bias" (followed by biases and descriptions for Nifty 50 and Gold)
+
+Your markdown MUST be highly professional, with no flowery or overly dramatic text. Keep all interpretations of ingresses and transits as short and scannable paragraphs.
+
+Output your analysis in a valid JSON structure with exactly these keys:
+   - "reply": (string, beautifully structured markdown with the headers and short interpretations)
    - "niftyBias": "BULLISH" | "BEARISH" | "NEUTRAL" | "VOLATILE"
    - "goldBias": "BULLISH" | "BEARISH" | "NEUTRAL" | "VOLATILE"
 

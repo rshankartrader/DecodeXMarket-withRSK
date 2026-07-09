@@ -23,6 +23,61 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when this setting was last updated." }
       },
       "required": ["url"]
+    },
+    "Trade": {
+      "title": "Trade Log Entry",
+      "description": "Stores individual trade logs for trading analysis.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique trade ID." },
+        "userId": { "type": "string", "description": "Owner of the trade." },
+        "instrument": { "type": "string", "description": "The asset traded (e.g., Nifty 50, Bitcoin)." },
+        "direction": { "type": "string", "enum": ["LONG", "SHORT"], "description": "Buy or Sell." },
+        "entryPrice": { "type": "number", "description": "Execution entry price." },
+        "exitPrice": { "type": "number", "description": "Execution exit price." },
+        "quantity": { "type": "number", "description": "Quantity/Lot traded." },
+        "pnl": { "type": "number", "description": "Profit/Loss amount." },
+        "status": { "type": "string", "enum": ["OPEN", "CLOSED"], "description": "Trade active state." },
+        "setup": { "type": "string", "description": "The core technical trading setup." },
+        "emotions": { "type": "array", "description": "Feelings during execution." },
+        "mistakes": { "type": "array", "description": "Errors made." },
+        "notes": { "type": "string", "description": "Detailed observation notes." },
+        "tradeDate": { "type": "string", "format": "date", "description": "Calendar date (YYYY-MM-DD)." },
+        "tradeTime": { "type": "string", "description": "Time of trade entry." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "instrument", "direction", "entryPrice", "quantity", "tradeDate", "pnl", "status"]
+    },
+    "PsychologyLog": {
+      "title": "Psychology Log Entry",
+      "description": "Stores daily emotional and psychological check-ins.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "mentalState": { "type": "string" },
+        "marketMood": { "type": "string" },
+        "lessonsLearned": { "type": "string" },
+        "dailyRating": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "date", "mentalState", "dailyRating"]
+    },
+    "TradingRule": {
+      "title": "Trading Rule Entry",
+      "description": "Stores trading plan guidelines and checklists.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "ruleText": { "type": "string" },
+        "category": { "type": "string", "enum": ["Pre-trade", "Daily", "Risk"] },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "ruleText", "category", "isActive"]
     }
   },
   "firestore": {
@@ -33,6 +88,18 @@
     "/settings/{settingId}": {
       "schema": "Setting",
       "description": "Collection of global system settings."
+    },
+    "/users/{userId}/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Subcollection of trades owned by a user."
+    },
+    "/users/{userId}/psychology/{logId}": {
+      "schema": "PsychologyLog",
+      "description": "Subcollection of daily emotional logs owned by a user."
+    },
+    "/users/{userId}/rules/{ruleId}": {
+      "schema": "TradingRule",
+      "description": "Subcollection of custom trading plan checklists owned by a user."
     }
   }
 }

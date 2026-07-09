@@ -938,21 +938,7 @@ export default function PlanetaryTransitsAspects({ isAdmin = false }: { isAdmin?
               <span>UPCOMING 3 CELESTIAL ASPECTS</span>
             </h4>
             
-            {transits.length > 0 && (
-              <button
-                type="button"
-                disabled={isAstroAiLoading}
-                onClick={handleRunAstroAi}
-                className="bg-terminal-accent/10 hover:bg-terminal-accent/25 border border-terminal-accent/30 text-terminal-accent px-2 py-0.5 rounded text-[9.5px] flex items-center space-x-1 cursor-pointer transition-all uppercase font-bold disabled:opacity-50"
-              >
-                {isAstroAiLoading ? (
-                  <span className="w-3 h-3 border-2 border-terminal-accent border-t-transparent rounded-full animate-spin"></span>
-                ) : (
-                  <Sparkles className="w-3 h-3 text-terminal-accent" />
-                )}
-                <span>{astroAiRun ? "Run Astro AI" : "Run Astro AI"}</span>
-              </button>
-            )}
+            {/* Astro AI button removed */}
           </div>
 
           {isAstroAiFallback && (

@@ -25,6 +25,7 @@ import {
   Target,
   Calculator,
   LineChart,
+  BookOpen,
   MessageSquare,
   Mail,
   Hash,
@@ -62,6 +63,7 @@ import AstrologySection from './components/AstrologySection';
 import GannConceptsSection from './components/GannConceptsSection';
 import StockMarketNewsSection from './components/StockMarketNewsSection';
 import AstroAiChat from './components/AstroAiChat';
+import { TradingJournalMain } from './components/TradingJournal/TradingJournalMain';
 import { Sparkles, Compass, Newspaper } from 'lucide-react';
 
 // --- Types ---
@@ -177,7 +179,6 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }
 
 const AuthPage = ({ onAuthSuccess, initialMode = 'login' }: { onAuthSuccess: () => void, initialMode?: 'login' | 'register' | 'forgot-password' }) => {
@@ -651,8 +652,132 @@ const StatItem = ({ label, value, color = 'text-gray-300' }: { label: string, va
   </div>
 );
 
+interface IndiaVixSpeedometerProps {
+  vixValue: string;
+}
+
+const IndiaVixSpeedometer = ({ vixValue }: IndiaVixSpeedometerProps) => {
+  const vix = parseFloat(vixValue) || 15;
+  
+  // VIX Range:
+  // VIX <= 10 -> Extreme Greed (100)
+  // VIX >= 30 -> Extreme Fear (0)
+  // Linear scale mapping:
+  let score = 100 - ((vix - 10) / (30 - 10)) * 100;
+  score = Math.max(0, Math.min(100, score));
+  
+  // Determine labels and color
+  let text = "Neutral";
+  let textColor = "text-yellow-400";
+  
+  if (score >= 75) {
+    text = "Extreme Greed";
+    textColor = "text-terminal-green font-extrabold";
+  } else if (score >= 55) {
+    text = "Greed";
+    textColor = "text-terminal-green/80 font-bold";
+  } else if (score >= 45) {
+    text = "Neutral";
+    textColor = "text-yellow-400 font-bold";
+  } else if (score >= 25) {
+    text = "Fear";
+    textColor = "text-orange-500 font-bold";
+  } else {
+    text = "Extreme Fear";
+    textColor = "text-terminal-red font-extrabold";
+  }
+
+  // Semi-circle angle goes from 180 (Extreme Fear, left) to 360 (Extreme Greed, right)
+  const angle = 180 + (score / 100) * 180;
+  const rad = (angle * Math.PI) / 180;
+  
+  // Gauge center: (100, 90)
+  const cx = 100;
+  const cy = 90;
+  const r = 70;
+  
+  // Needle tip
+  const nx = cx + (r - 10) * Math.cos(rad);
+  const ny = cy + (r - 10) * Math.sin(rad);
+
+  return (
+    <div className="terminal-card p-4 bg-terminal-card border border-terminal-border flex flex-col items-center justify-center">
+      <h4 className="text-[10px] font-mono text-gray-500 uppercase mb-2 w-full text-left">India VIX Fear & Greed</h4>
+      <div className="relative flex flex-col items-center w-full max-w-[180px]">
+        {/* SVG Gauge */}
+        <svg width="100%" height="110" viewBox="0 0 200 110" className="overflow-visible">
+          {/* Gradients */}
+          <defs>
+            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#EF4444" /> {/* Red - Fear */}
+              <stop offset="25%" stopColor="#F97316" /> {/* Orange */}
+              <stop offset="50%" stopColor="#EAB308" /> {/* Yellow - Neutral */}
+              <stop offset="75%" stopColor="#86EFAC" /> {/* Light green */}
+              <stop offset="100%" stopColor="#22C55E" /> {/* Green - Greed */}
+            </linearGradient>
+          </defs>
+
+          {/* Background Track Arc */}
+          <path
+            d="M 25,90 A 75,75 0 0,1 175,90"
+            fill="none"
+            stroke="#1E293B"
+            strokeWidth="12"
+            strokeLinecap="round"
+          />
+
+          {/* Colored Arc Overlay */}
+          <path
+            d="M 25,90 A 75,75 0 0,1 175,90"
+            fill="none"
+            stroke="url(#gaugeGradient)"
+            strokeWidth="12"
+            strokeLinecap="round"
+            opacity="0.9"
+          />
+
+          {/* Scale ticks / markings */}
+          {/* Left Tick - Extreme Fear */}
+          <text x="15" y="105" fill="#EF4444" className="text-[10px] font-mono font-bold" textAnchor="middle">FEAR</text>
+          {/* Center Tick - Neutral */}
+          <text x="100" y="25" fill="#EAB308" className="text-[10px] font-mono font-bold" textAnchor="middle">NEUTRAL</text>
+          {/* Right Tick - Extreme Greed */}
+          <text x="185" y="105" fill="#22C55E" className="text-[10px] font-mono font-bold" textAnchor="middle">GREED</text>
+
+          {/* Needle Pin Pinpoint Center */}
+          <circle cx={cx} cy={cy} r="6" fill="#FFFFFF" />
+          <circle cx={cx} cy={cy} r="3" fill="#000000" />
+
+          {/* Needle Pointer */}
+          <line
+            x1={cx}
+            y1={cy}
+            x2={nx}
+            y2={ny}
+            stroke="#FFFFFF"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </svg>
+
+        {/* Legend / Status values */}
+        <div className="text-center mt-1">
+          <span className={`text-[11px] font-black uppercase tracking-wider ${textColor}`}>{text}</span>
+          <div className="flex items-center justify-center space-x-2 mt-0.5 text-[10px] font-mono">
+            <span className="text-gray-500">VIX:</span>
+            <span className="font-bold text-white">{vix}</span>
+            <span className="text-gray-600">|</span>
+            <span className="text-gray-500">SCORE:</span>
+            <span className="font-bold text-white">{Math.round(score)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
-  const [view, setView] = useState<'landing' | 'dashboard' | 'backtest' | 'gann' | 'oi' | 'risk' | 'indicators' | 'auth' | 'pricing' | 'checkout' | 'user-management' | 'redeem-success'>('landing');
+  const [view, setView] = useState<'landing' | 'dashboard' | 'backtest' | 'gann' | 'oi' | 'risk' | 'indicators' | 'auth' | 'pricing' | 'checkout' | 'user-management' | 'redeem-success' | 'journal'>('landing');
   const [dashboardTab, setDashboardTab] = useState<'dashboard' | 'astrology' | 'gann' | 'news'>('dashboard');
   const [selectedPlanDetail, setSelectedPlanDetail] = useState<{ id: string; name: string; price: number; originalPrice: number; discount: number } | null>(null);
   const [redeemDuration, setRedeemDuration] = useState<string>('');
@@ -669,6 +794,18 @@ export default function App() {
       setDashboardTab('dashboard');
     }
   }, [view]);
+
+  // Support custom event navigation for login redirection
+  useEffect(() => {
+    const handleCustomNav = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      if (customEvent.detail) {
+        setView(customEvent.detail as any);
+      }
+    };
+    window.addEventListener('rsk-navigate', handleCustomNav as any);
+    return () => window.removeEventListener('rsk-navigate', handleCustomNav as any);
+  }, []);
 
   // Test connection to Firestore
   useEffect(() => {
@@ -727,7 +864,7 @@ export default function App() {
     }
 
     // Views that require login
-    const loginRequiredViews = ['dashboard', 'oi', 'backtest', 'risk', 'gann'];
+    const loginRequiredViews = ['dashboard', 'oi', 'backtest', 'risk', 'gann', 'journal'];
     
     // Views that require paid/trial access
     const accessRequiredViews = ['dashboard', 'oi'];
@@ -838,8 +975,8 @@ export default function App() {
           }
 
           // Reversals - Fetch strictly D8:D15 (index 7 to 14) and E8:E20 (index 7 to 19)
-          const rev15: string[] = [];
-          const rev5: string[] = [];
+          const rawRev15: string[] = [];
+          const rawRev5: string[] = [];
           
           // Try to find specific column indices for 15M and 5M dynamically, defaulting to D and E (3 and 4)
           // We look for cells containing "15" and "5" along with terms like "revers", "min", or "rev" to prevent matching bare prices (e.g. Sensex values like 75527.95)
@@ -866,7 +1003,7 @@ export default function App() {
           for (let i = 7; i <= 14; i++) {
             const val = getCell(i, col15);
             if (val && val !== "-" && val !== "" && timeRegex.test(val)) {
-              rev15.push(val);
+              rawRev15.push(val);
             }
           }
 
@@ -874,9 +1011,40 @@ export default function App() {
           for (let i = 7; i <= 19; i++) {
             const val = getCell(i, col5);
             if (val && val !== "-" && val !== "" && timeRegex.test(val)) {
-              rev5.push(val);
+              rawRev5.push(val);
             }
           }
+
+          const formatAndSortTimes = (times: string[]): string[] => {
+            const parsed = times.map(t => {
+              const clean = t.trim().toUpperCase();
+              const match = clean.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/);
+              if (!match) {
+                return { original: t, minutes: 9999, formatted: t };
+              }
+              
+              const hours = parseInt(match[1], 10);
+              const minutes = parseInt(match[2], 10);
+              const ampm = match[4] || '';
+              
+              let sortHours = hours;
+              if (ampm === 'PM' && hours < 12) {
+                sortHours += 12;
+              } else if (ampm === 'AM' && hours === 12) {
+                sortHours = 0;
+              }
+              const totalMinutes = sortHours * 60 + minutes;
+              
+              const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}${ampm ? ' ' + ampm : ''}`;
+              return { original: t, minutes: totalMinutes, formatted };
+            });
+            
+            parsed.sort((a, b) => a.minutes - b.minutes);
+            return parsed.map(p => p.formatted);
+          };
+
+          const sortedRev15 = formatAndSortTimes(rawRev15);
+          const sortedRev5 = formatAndSortTimes(rawRev5);
 
           // Support & Resistance
           const support: string[] = [];
@@ -919,8 +1087,8 @@ export default function App() {
             indiaVix: vix || getCell(15, 7),
             dailyRange: dRange.includes('-') && dRange.length > 5 ? dRange : `${getCell(16, 8)} - ${getCell(16, 9)}`,
             weeklyRange: wRange.includes('-') && wRange.length > 5 ? wRange : `${getCell(17, 8)} - ${getCell(17, 9)}`,
-            reversals15m: Array.from(new Set(rev15)), // Remove duplicates
-            reversals5m: Array.from(new Set(rev5)),
+            reversals15m: Array.from(new Set(rawRev15)), // Remove duplicates, keeping original spreadsheet order and values
+            reversals5m: Array.from(new Set(rawRev5)),
             support,
             resistance,
             lastUpdated: new Date().toLocaleTimeString(),
@@ -1756,6 +1924,9 @@ export default function App() {
             Monitor reversal timings for entry/exit precision."
           </p>
         </div>
+
+        {/* Small India VIX Speedometer */}
+        <IndiaVixSpeedometer vixValue={data.indiaVix} />
       </div>
 
       {/* Right Sidebar - Technicals */}
@@ -2293,137 +2464,840 @@ export default function App() {
   };
 
   const RiskManagement = () => {
-    const [capital, setCapital] = useState(100000);
-    const [riskPercent, setRiskPercent] = useState(1);
-    const [stopLoss, setStopLoss] = useState(20);
-    const [lotSize, setLotSize] = useState(65); // Nifty default
-    const [numTrades, setNumTrades] = useState(20); // Default 20 trades
+    // Calculator States
+    const [accountCurrency, setAccountCurrency] = useState<'INR' | 'USD'>('INR');
+    const [capital, setCapital] = useState(500000); // 500,000 INR default
+    const [riskPercent, setRiskPercent] = useState(1); // Default 1%
+    const [selectedInstrument, setSelectedInstrument] = useState<'nifty' | 'banknifty' | 'sensex' | 'btc' | 'eth' | 'gold'>('nifty');
+    const [tradeDirection, setTradeDirection] = useState<'LONG' | 'SHORT'>('LONG');
 
-    const riskPerTrade = capital * (riskPercent / 100);
-    const rawQuantity = stopLoss > 0 ? riskPerTrade / stopLoss : 0;
-    const lots = Math.floor(rawQuantity / lotSize);
-    const actualQuantity = lots * lotSize;
-    const actualRisk = actualQuantity * stopLoss;
+    // Live Rates States
+    const [usdToInr, setUsdToInr] = useState(83.45);
+    const [livePrices, setLivePrices] = useState({
+      btc: 95000,
+      eth: 3400,
+      gold: 2350
+    });
+    const [isLoadingRates, setIsLoadingRates] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<string>('');
+
+    // Fetch live rates
+    const fetchRates = async () => {
+      setIsLoadingRates(true);
+      try {
+        // 1. Fetch USD to INR Live Exchange Rate
+        const erResponse = await fetch('https://open.er-api.com/v6/latest/USD');
+        let rate = 83.45;
+        if (erResponse.ok) {
+          const erData = await erResponse.json();
+          if (erData?.rates?.INR) {
+            rate = Number(erData.rates.INR.toFixed(2));
+            setUsdToInr(rate);
+          }
+        }
+        
+        // 2. Fetch BTC, ETH, and PAXG (Gold) prices from Binance public APIs
+        const btcResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+        const ethResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT');
+        const paxgResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT');
+        
+        let btcVal = 95000;
+        let ethVal = 3400;
+        let goldVal = 2350;
+
+        if (btcResponse.ok) {
+          const btcData = await btcResponse.json();
+          if (btcData.price) btcVal = Math.round(Number(btcData.price));
+        }
+        if (ethResponse.ok) {
+          const ethData = await ethResponse.json();
+          if (ethData.price) ethVal = Math.round(Number(ethData.price));
+        }
+        if (paxgResponse.ok) {
+          const paxgData = await paxgResponse.json();
+          if (paxgData.price) goldVal = Math.round(Number(paxgData.price));
+        }
+
+        setLivePrices({ btc: btcVal, eth: ethVal, gold: goldVal });
+        setLastUpdated(new Date().toLocaleTimeString());
+      } catch (e) {
+        console.error("Failed to fetch live rates:", e);
+      } finally {
+        setIsLoadingRates(false);
+      }
+    };
+
+    // Auto fetch on load
+    useEffect(() => {
+      fetchRates();
+    }, []);
     
-    // Funds allocated for one trade
-    const fundsPerTrade = capital / numTrades;
+    // Instrument Presets using live pricing where available
+    const presets = {
+      nifty: {
+        name: 'Nifty 50',
+        symbol: 'NIFTY',
+        currency: 'INR',
+        defaultPrice: 24300,
+        defaultSLPoints: 30,
+        lotSize: 65, // Updated lot size (1 lot = 65 units)
+        type: 'index_option',
+        icon: '🇮🇳'
+      },
+      banknifty: {
+        name: 'Bank Nifty',
+        symbol: 'BANKNIFTY',
+        currency: 'INR',
+        defaultPrice: 52500,
+        defaultSLPoints: 80,
+        lotSize: 30, // Updated lot size (1 lot = 30 units)
+        type: 'index_option',
+        icon: '🇮🇳'
+      },
+      sensex: {
+        name: 'Sensex',
+        symbol: 'SENSEX',
+        currency: 'INR',
+        defaultPrice: 79500,
+        defaultSLPoints: 120,
+        lotSize: 20, // Updated lot size (1 lot = 20 units)
+        type: 'index_option',
+        icon: '🇮🇳'
+      },
+      btc: {
+        name: 'Bitcoin',
+        symbol: 'BTCUSDT',
+        currency: 'USD',
+        defaultPrice: livePrices.btc,
+        defaultSLPoints: 500,
+        lotSize: 1,
+        type: 'crypto',
+        icon: '🪙'
+      },
+      eth: {
+        name: 'Ethereum',
+        symbol: 'ETHUSDT',
+        currency: 'USD',
+        defaultPrice: livePrices.eth,
+        defaultSLPoints: 40,
+        lotSize: 1,
+        type: 'crypto',
+        icon: '⟠'
+      },
+      gold: {
+        name: 'XAU/USD (Gold)',
+        symbol: 'XAUUSD',
+        currency: 'USD',
+        defaultPrice: livePrices.gold,
+        defaultSLPoints: 8,
+        lotSize: 100, // 1 Standard Lot = 100 oz
+        type: 'commodity',
+        icon: '🟡'
+      }
+    };
 
-    // For Max Premium, if they can't even afford 1 lot risk-wise, 
-    // show them the max premium they could pay for 1 lot with their capital.
-    const maxPremium = lots > 0 
-      ? Math.floor(fundsPerTrade / actualQuantity) 
-      : Math.floor(fundsPerTrade / lotSize);
+    const currentPreset = presets[selectedInstrument];
+
+    // Inputs adapting to selected instrument
+    const [riskType, setRiskType] = useState<'percentage' | 'absolute_amount'>('percentage');
+    const [riskValue, setRiskValue] = useState(1); // 1% default or flat amount (e.g., 5000)
+
+    const [slType, setSlType] = useState<'points' | 'price_levels'>('points');
+    const [slValuePoints, setSlValuePoints] = useState(30);
+
+    const [entryPrice, setEntryPrice] = useState(24300);
+    const [stopLossPrice, setStopLossPrice] = useState(24270);
+    const [targetPrice, setTargetPrice] = useState(24360);
+    const [customLotSize, setCustomLotSize] = useState(65);
+    const [tickValue, setTickValue] = useState(1.0);
+
+    // Keep inputs in sync when instrument changes or live prices refresh
+    useEffect(() => {
+      const preset = presets[selectedInstrument];
+      setEntryPrice(preset.defaultPrice);
+      setCustomLotSize(preset.lotSize);
+      setSlValuePoints(preset.defaultSLPoints);
+      
+      if (tradeDirection === 'LONG') {
+        setStopLossPrice(preset.defaultPrice - preset.defaultSLPoints);
+        setTargetPrice(preset.defaultPrice + preset.defaultSLPoints * 2);
+      } else {
+        setStopLossPrice(preset.defaultPrice + preset.defaultSLPoints);
+        setTargetPrice(preset.defaultPrice - preset.defaultSLPoints * 2);
+      }
+    }, [selectedInstrument, livePrices]);
+
+    // Keep prices synchronized when tradeDirection, slType or slValuePoints update
+    useEffect(() => {
+      if (slType === 'points') {
+        if (tradeDirection === 'LONG') {
+          setStopLossPrice(entryPrice - slValuePoints);
+          setTargetPrice(entryPrice + slValuePoints * 2);
+        } else {
+          setStopLossPrice(entryPrice + slValuePoints);
+          setTargetPrice(entryPrice - slValuePoints * 2);
+        }
+      }
+    }, [tradeDirection, slType, slValuePoints, entryPrice]);
+
+    // Convert Capital to instrument currency
+    const getCapitalInInstrumentCurrency = () => {
+      if (accountCurrency === currentPreset.currency) {
+        return capital;
+      }
+      if (accountCurrency === 'INR' && currentPreset.currency === 'USD') {
+        return capital / usdToInr;
+      }
+      if (accountCurrency === 'USD' && currentPreset.currency === 'INR') {
+        return capital * usdToInr;
+      }
+      return capital;
+    };
+
+    const capitalInInst = getCapitalInInstrumentCurrency();
+
+    // 1. Calculate Total Risk Amount
+    const totalRiskAmount = riskType === 'percentage'
+      ? capital * (riskValue / 100)
+      : riskValue;
+
+    // Convert Risk Amount to Instrument Currency
+    const totalRiskInInst = accountCurrency === currentPreset.currency
+      ? totalRiskAmount
+      : accountCurrency === 'INR' && currentPreset.currency === 'USD'
+      ? totalRiskAmount / usdToInr
+      : totalRiskAmount * usdToInr;
+
+    // 2. Calculate Stop Loss in Points/Pips
+    const finalSLPoints = slType === 'price_levels'
+      ? Math.abs(entryPrice - stopLossPrice)
+      : slValuePoints;
+
+    // 3. Calculate Total Risk Per Unit
+    const riskPerUnit = finalSLPoints * tickValue;
+
+    // 4. Calculate Total Units
+    const exactUnits = riskPerUnit > 0 ? totalRiskInInst / riskPerUnit : 0;
+
+    // 5. Calculate Number of Lots
+    const rawLots = customLotSize > 0 ? exactUnits / customLotSize : 0;
+
+    // 6. Apply Rounding Constraints
+    let recommendedLots = 0;
+    if (currentPreset.type === 'index_option') {
+      recommendedLots = Math.floor(rawLots); // No fractional lots for options
+    } else if (currentPreset.type === 'commodity') {
+      recommendedLots = Number(rawLots.toFixed(2)); // Standard commodity increments
+    } else {
+      recommendedLots = Number(rawLots.toFixed(4)); // High precision crypto
+    }
+
+    const actualUnits = recommendedLots * customLotSize;
+    const actualRiskInInst = actualUnits * riskPerUnit;
+
+    const getAmountInAccountCurrency = (amtInInst: number) => {
+      if (accountCurrency === currentPreset.currency) return amtInInst;
+      if (accountCurrency === 'INR' && currentPreset.currency === 'USD') {
+        return amtInInst * usdToInr;
+      }
+      if (accountCurrency === 'USD' && currentPreset.currency === 'INR') {
+        return amtInInst / usdToInr;
+      }
+      return amtInInst;
+    };
+
+    const actualRiskInAccount = getAmountInAccountCurrency(actualRiskInInst);
+    const notionalValue = actualUnits * entryPrice;
+    const notionalValueInAccount = getAmountInAccountCurrency(notionalValue);
+    const leverageRatio = capital > 0 ? notionalValueInAccount / capital : 0;
+    
+    // Handlers for inputs
+    const handleEntryPriceChange = (val: number) => {
+      setEntryPrice(val);
+      if (slType === 'points') {
+        if (tradeDirection === 'LONG') {
+          setStopLossPrice(val - slValuePoints);
+          setTargetPrice(val + slValuePoints * 2);
+        } else {
+          setStopLossPrice(val + slValuePoints);
+          setTargetPrice(val - slValuePoints * 2);
+        }
+      } else {
+        const diff = Math.abs(val - stopLossPrice);
+        if (tradeDirection === 'LONG') {
+          setTargetPrice(val + diff * 2);
+        } else {
+          setTargetPrice(val - diff * 2);
+        }
+      }
+    };
+
+    const handleSLPointsChange = (val: number) => {
+      setSlValuePoints(val);
+      if (tradeDirection === 'LONG') {
+        setStopLossPrice(entryPrice - val);
+        setTargetPrice(entryPrice + val * 2);
+      } else {
+        setStopLossPrice(entryPrice + val);
+        setTargetPrice(entryPrice - val * 2);
+      }
+    };
+
+    const handleSLPriceChange = (val: number) => {
+      setStopLossPrice(val);
+      const diff = Math.abs(entryPrice - val);
+      setSlValuePoints(diff);
+      if (tradeDirection === 'LONG') {
+        setTargetPrice(entryPrice + diff * 2);
+      } else {
+        setTargetPrice(entryPrice - diff * 2);
+      }
+    };
+
+    // Risk Reward ratio
+    const rewardPoints = Math.abs(targetPrice - entryPrice);
+    const rrRatio = finalSLPoints > 0 ? Number((rewardPoints / finalSLPoints).toFixed(2)) : 0;
+    const potentialRewardInInst = actualUnits * rewardPoints;
+    const potentialRewardInAccount = getAmountInAccountCurrency(potentialRewardInInst);
+
+    // Swap Account Currency Helper
+    const toggleAccountCurrency = (curr: 'INR' | 'USD') => {
+      if (curr === accountCurrency) return;
+      setAccountCurrency(curr);
+      if (curr === 'INR') {
+        setCapital(Math.round(capital * usdToInr));
+      } else {
+        setCapital(Math.round(capital / usdToInr));
+      }
+    };
+
+    const accountSymbol = accountCurrency === 'INR' ? '₹' : '$';
+    const instSymbol = currentPreset.currency === 'INR' ? '₹' : '$';
+
+    // Setup structured response schema for API output
+    const apiResponse = {
+      account_size: capital,
+      account_currency: accountCurrency,
+      risk_type: riskType,
+      risk_value: riskValue,
+      risk_amount_account_currency: totalRiskAmount,
+      instrument: selectedInstrument,
+      instrument_currency: currentPreset.currency,
+      exchange_rate: usdToInr,
+      trade_direction: tradeDirection,
+      entry_price: entryPrice,
+      stop_loss_type: slType,
+      stop_loss_value: slType === 'points' ? slValuePoints : stopLossPrice,
+      stop_loss_points: finalSLPoints,
+      stop_loss_price: stopLossPrice,
+      target_price: targetPrice,
+      contract_multiplier_lot_size: customLotSize,
+      tick_value_multiplier: tickValue,
+      calculated_units: exactUnits,
+      calculated_lots: rawLots,
+      suggested_lots: recommendedLots,
+      suggested_units: actualUnits,
+      actual_risk_exposure_instrument_currency: actualRiskInInst,
+      actual_risk_exposure_account_currency: actualRiskInAccount,
+      actual_risk_percentage: capital > 0 ? (actualRiskInAccount / capital) * 100 : 0,
+      notional_value_instrument_currency: notionalValue,
+      notional_value_account_currency: notionalValueInAccount,
+      leverage_ratio: leverageRatio,
+      risk_reward_ratio: `1:${rrRatio}`
+    };
 
     return (
-      <div className="flex-1 p-4 md:p-8 max-w-4xl mx-auto w-full space-y-8">
-        <div className="flex flex-col space-y-2">
-          <h2 className="text-2xl font-black tracking-tighter text-white uppercase">Risk Management Lab</h2>
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-widest">Precision Calculator for Indian Option Buyers</p>
+      <div className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full space-y-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col space-y-2">
+            <h2 className="text-2xl font-black tracking-tighter text-white uppercase">Risk Management Lab</h2>
+            <p className="text-xs font-mono text-gray-500 uppercase tracking-widest">Multi-Instrument Position Sizing & Live Leverage Intelligence</p>
+          </div>
+          
+          <button 
+            onClick={fetchRates} 
+            disabled={isLoadingRates}
+            className="flex items-center space-x-2 bg-terminal-accent/10 hover:bg-terminal-accent/20 border border-terminal-accent/30 text-terminal-accent px-3 py-1.5 rounded text-xs font-mono transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRates ? 'animate-spin' : ''}`} />
+            <span>{isLoadingRates ? 'SYNCING RATES...' : 'REFRESH LIVE RATES'}</span>
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Inputs */}
-          <div className="terminal-card p-6 space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-mono text-terminal-accent uppercase tracking-widest">Trading Capital (₹)</label>
-                <input 
-                  type="number" 
+        {/* Top bar: Capital and Risk profile */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="terminal-card p-4 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Account Base Currency</span>
+              <div className="flex space-x-1">
+                <button
+                  onClick={() => toggleAccountCurrency('INR')}
+                  className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                    accountCurrency === 'INR'
+                      ? 'bg-terminal-accent text-black font-bold'
+                      : 'bg-black/40 text-gray-400 border border-terminal-border/40 hover:text-white'
+                  }`}
+                >
+                  ₹ INR
+                </button>
+                <button
+                  onClick={() => toggleAccountCurrency('USD')}
+                  className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                    accountCurrency === 'USD'
+                      ? 'bg-terminal-accent text-black font-bold'
+                      : 'bg-black/40 text-gray-400 border border-terminal-border/40 hover:text-white'
+                  }`}
+                >
+                  $ USD
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs font-mono text-gray-400">Total Account Equity</span>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-gray-500">{accountSymbol}</span>
+                <input
+                  type="number"
                   value={capital}
-                  onChange={(e) => setCapital(Number(e.target.value))}
-                  className="bg-black/40 border border-terminal-border rounded px-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-32 text-right"
+                  onChange={(e) => setCapital(Math.max(0, Number(e.target.value)))}
+                  className="bg-black/40 border border-terminal-border rounded pl-6 pr-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-36 text-right font-bold"
                 />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-[10px] font-mono text-gray-500 uppercase">
-                  <span>Risk Per Trade (%)</span>
-                  <span className="text-terminal-accent">{riskPercent}%</span>
-                </div>
-                <input 
-                  type="range" 
-                  min="0.5" 
-                  max="10" 
-                  step="0.5"
-                  value={riskPercent}
-                  onChange={(e) => setRiskPercent(Number(e.target.value))}
-                  className="w-full accent-terminal-accent"
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Stop Loss (Points)</label>
-                <input 
-                  type="number" 
-                  value={stopLoss}
-                  onChange={(e) => setStopLoss(Number(e.target.value))}
-                  className="bg-black/40 border border-terminal-border rounded px-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-24 text-right"
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Number of Trades</label>
-                <select 
-                  value={numTrades}
-                  onChange={(e) => setNumTrades(Number(e.target.value))}
-                  className="bg-black/40 border border-terminal-border rounded px-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-32"
-                >
-                  <option value={10}>10 Trades</option>
-                  <option value={15}>15 Trades</option>
-                  <option value={20}>20 Trades</option>
-                  <option value={25}>25 Trades</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Lot Size</label>
-                <select 
-                  value={lotSize}
-                  onChange={(e) => setLotSize(Number(e.target.value))}
-                  className="bg-black/40 border border-terminal-border rounded px-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-32"
-                >
-                  <option value={65}>NIFTY (65)</option>
-                  <option value={30}>BANKNIFTY (30)</option>
-                  <option value={60}>FINNIFTY (60)</option>
-                  <option value={20}>SENSEX (20)</option>
-                  <option value={120}>MIDCPNIFTY (120)</option>
-                </select>
               </div>
             </div>
           </div>
 
-          {/* Results */}
-          <div className="space-y-4">
-            <div className="terminal-card p-6 bg-terminal-accent/5 border-terminal-accent/30">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-mono text-gray-500 uppercase">Risk Amount</span>
-                  <div className="text-xl font-black text-terminal-accent">₹{riskPerTrade.toLocaleString()}</div>
+          <div className="terminal-card p-4 flex flex-col justify-between">
+            <div className="flex justify-between items-center text-[10px] font-mono text-gray-500 uppercase mb-2">
+              <span>Trade Risk Budget</span>
+              <div className="flex space-x-1 bg-black/60 p-0.5 rounded border border-terminal-border/40">
+                <button
+                  onClick={() => setRiskType('percentage')}
+                  className={`px-2 py-0.5 text-[8px] font-mono rounded ${
+                    riskType === 'percentage'
+                      ? 'bg-terminal-accent text-black font-bold'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  % PERC
+                </button>
+                <button
+                  onClick={() => setRiskType('absolute_amount')}
+                  className={`px-2 py-0.5 text-[8px] font-mono rounded ${
+                    riskType === 'absolute_amount'
+                      ? 'bg-terminal-accent text-black font-bold'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {accountSymbol} FLAT
+                </button>
+              </div>
+            </div>
+            {riskType === 'percentage' ? (
+              <div className="space-y-1">
+                <input
+                  type="range"
+                  min="0.1"
+                  max="10"
+                  step="0.1"
+                  value={riskValue}
+                  onChange={(e) => setRiskValue(Number(e.target.value))}
+                  className="w-full accent-terminal-accent cursor-pointer my-1.5"
+                />
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-gray-500">Risk Margin %:</span>
+                  <span className="text-terminal-accent font-bold">{riskValue}%</span>
                 </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-mono text-gray-500 uppercase">Max Lots</span>
-                  <div className="text-xl font-black text-white">{lots > 0 ? lots : 0} <span className="text-[10px] text-gray-500">LOTS</span></div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between my-1">
+                <span className="text-xs font-mono text-gray-400">Risk Value ({accountSymbol})</span>
+                <input
+                  type="number"
+                  value={riskValue}
+                  onChange={(e) => setRiskValue(Math.max(1, Number(e.target.value)))}
+                  className="bg-black/40 border border-terminal-border rounded px-2 py-1 text-xs font-mono text-white focus:border-terminal-accent outline-none w-28 text-right font-bold"
+                />
+              </div>
+            )}
+            <div className="flex justify-between items-center text-xs font-mono border-t border-terminal-border/20 pt-1.5 mt-1.5">
+              <span className="text-gray-500">Max Risk Capital:</span>
+              <span className="text-terminal-red font-bold">
+                {accountSymbol}
+                {totalRiskAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+
+          <div className="terminal-card p-4 bg-terminal-accent/5 border-terminal-accent/30 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1">
+              <span>USD ⇄ INR Exchange</span>
+              {lastUpdated && <span className="text-[8px] text-terminal-accent">LIVE FEED: {lastUpdated}</span>}
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs font-mono text-gray-400">Forex Valuation</span>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-gray-500">₹</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={usdToInr}
+                  onChange={(e) => setUsdToInr(Math.max(0.01, Number(e.target.value)))}
+                  className="bg-black/40 border border-terminal-border rounded pl-6 pr-3 py-1 text-xs font-mono text-white focus:border-terminal-accent outline-none w-28 text-right font-bold"
+                />
+              </div>
+            </div>
+            <p className="text-[9px] font-mono text-gray-500 leading-tight uppercase mt-1">
+              Provides dynamic conversions. Manually editable above.
+            </p>
+          </div>
+        </div>
+
+        {/* Instrument Grid Picker */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Select Tradable Instrument</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {(Object.keys(presets) as Array<keyof typeof presets>).map((key) => {
+              const item = presets[key];
+              const isSelected = selectedInstrument === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSelectedInstrument(key)}
+                  className={`flex flex-col items-center justify-center p-3 rounded border transition-all relative overflow-hidden ${
+                    isSelected
+                      ? 'bg-terminal-accent/10 border-terminal-accent shadow-[0_0_12px_rgba(var(--terminal-accent-rgb),0.15)] text-white'
+                      : 'bg-black/30 border-terminal-border/60 hover:border-gray-500 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span className="text-xl mb-1">{item.icon}</span>
+                  <span className="text-xs font-bold font-sans tracking-tight">{item.name}</span>
+                  <span className="text-[8px] font-mono uppercase text-gray-500 mt-0.5">
+                    {item.currency === 'INR' ? `₹${item.defaultPrice.toLocaleString()}` : `$${item.defaultPrice.toLocaleString()}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Sizing Parameters Column */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="terminal-card p-6 space-y-5">
+              <div className="flex items-center justify-between border-b border-terminal-border/30 pb-2">
+                <h3 className="text-xs font-mono text-terminal-accent uppercase tracking-widest">
+                  Trade Setup Params
+                </h3>
+                
+                {/* Trade Direction Toggle */}
+                <div className="flex space-x-1 bg-black/40 p-0.5 rounded border border-terminal-border/40">
+                  <button
+                    onClick={() => setTradeDirection('LONG')}
+                    className={`px-2 py-0.5 text-[9px] font-mono rounded font-bold uppercase ${
+                      tradeDirection === 'LONG'
+                        ? 'bg-terminal-green text-black'
+                        : 'text-gray-500 hover:text-white'
+                    }`}
+                  >
+                    LONG
+                  </button>
+                  <button
+                    onClick={() => setTradeDirection('SHORT')}
+                    className={`px-2 py-0.5 text-[9px] font-mono rounded font-bold uppercase ${
+                      tradeDirection === 'SHORT'
+                        ? 'bg-terminal-red text-white'
+                        : 'text-gray-500 hover:text-white'
+                    }`}
+                  >
+                    SHORT
+                  </button>
                 </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-mono text-gray-500 uppercase">Quantity</span>
-                  <div className="text-xl font-black text-white">{Math.floor(rawQuantity)} <span className="text-[10px] text-gray-500">UNITS</span></div>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-mono text-gray-500 uppercase">Max Premium Price</span>
-                  <div className="text-xl font-black text-terminal-green">₹{maxPremium.toLocaleString()}</div>
-                </div>
-                <div className="col-span-2 pt-2 border-t border-terminal-border/30">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-mono text-gray-500 uppercase">Funds Per Trade (at {numTrades} Trades)</span>
-                    <div className="text-lg font-black text-white">₹{fundsPerTrade.toLocaleString()}</div>
+              </div>
+
+              <div className="space-y-4">
+                {/* Entry Price */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-300">Entry Price</span>
+                    <span className="text-[9px] font-mono text-gray-500 uppercase">Current Quote Price ({currentPreset.currency})</span>
                   </div>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-gray-500">{instSymbol}</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={entryPrice}
+                      onChange={(e) => handleEntryPriceChange(Number(e.target.value))}
+                      className="bg-black/40 border border-terminal-border rounded pl-6 pr-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-32 text-right"
+                    />
+                  </div>
+                </div>
+
+                {/* Stop Loss Input Selector */}
+                <div className="flex items-center justify-between border-t border-terminal-border/20 pt-3">
+                  <span className="text-xs font-bold text-gray-300">Stop Loss Mode</span>
+                  <div className="flex space-x-1 bg-black/40 p-0.5 rounded border border-terminal-border/40">
+                    <button
+                      onClick={() => setSlType('points')}
+                      className={`px-2 py-0.5 text-[9px] font-mono rounded font-bold uppercase ${
+                        slType === 'points'
+                          ? 'bg-terminal-accent text-black'
+                          : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      POINTS/PIPS
+                    </button>
+                    <button
+                      onClick={() => setSlType('price_levels')}
+                      className={`px-2 py-0.5 text-[9px] font-mono rounded font-bold uppercase ${
+                        slType === 'price_levels'
+                          ? 'bg-terminal-accent text-black'
+                          : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      PRICE LEVEL
+                    </button>
+                  </div>
+                </div>
+
+                {slType === 'points' ? (
+                  /* Stop Loss Points / Pips Input */
+                  <div className="flex items-center justify-between bg-terminal-accent/5 p-3 rounded border border-terminal-accent/20">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-terminal-accent">Stop Loss Points</span>
+                      <span className="text-[9px] font-mono text-gray-400 uppercase">Risk offset in Points/Pips</span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-mono text-terminal-accent font-bold uppercase">PTS</span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={slValuePoints}
+                        onChange={(e) => handleSLPointsChange(Math.max(0.0001, Number(e.target.value)))}
+                        className="bg-black/60 border border-terminal-accent/60 rounded pl-3 pr-12 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-32 text-right font-black"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* Stop Loss Price level Input */
+                  <div className="flex items-center justify-between bg-terminal-red/5 p-3 rounded border border-terminal-red/20">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-terminal-red">Stop Loss Price</span>
+                      <span className="text-[9px] font-mono text-gray-400 uppercase">Exact trigger level</span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-gray-500">{instSymbol}</span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={stopLossPrice}
+                        onChange={(e) => handleSLPriceChange(Number(e.target.value))}
+                        className="bg-black/60 border border-terminal-red/40 rounded pl-6 pr-3 py-1.5 text-xs font-mono text-white focus:border-terminal-red outline-none w-32 text-right font-bold"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Target Price Exit */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-300">Take Profit Price</span>
+                    <span className="text-[9px] font-mono text-gray-500 uppercase">Exit level for profit take</span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-gray-500">{instSymbol}</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={targetPrice}
+                      onChange={(e) => setTargetPrice(Number(e.target.value))}
+                      className="bg-black/40 border border-terminal-border rounded pl-6 pr-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-32 text-right"
+                    />
+                  </div>
+                </div>
+
+                {/* Broker Custom Contract Size Multiplier Override */}
+                <div className="flex items-center justify-between pt-3 border-t border-terminal-border/20">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-300">Contract Lot Size</span>
+                    <span className="text-[9px] font-mono text-gray-500 uppercase">Override contract specifications</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="any"
+                    value={customLotSize}
+                    onChange={(e) => setCustomLotSize(Math.max(0.0001, Number(e.target.value)))}
+                    className="bg-black/40 border border-terminal-border rounded px-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-24 text-right"
+                  />
+                </div>
+
+                {/* Tick/Pip value modifier */}
+                <div className="flex items-center justify-between pt-2 border-t border-terminal-border/20">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-300">Tick/Pip Valuation</span>
+                    <span className="text-[9px] font-mono text-gray-500 uppercase">Value scaling factor per point</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={tickValue}
+                    onChange={(e) => setTickValue(Math.max(0.0001, Number(e.target.value)))}
+                    className="bg-black/40 border border-terminal-border rounded px-3 py-1.5 text-xs font-mono text-white focus:border-terminal-accent outline-none w-24 text-right"
+                  />
                 </div>
               </div>
             </div>
 
+            {/* Micro Specs Card */}
+            <div className="terminal-card p-4 border-terminal-border/40 space-y-2">
+              <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest block">Instrument Specifications</span>
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                <div className="bg-black/20 p-2 rounded">
+                  <div className="text-gray-500 text-[9px] uppercase">Market Type</div>
+                  <div className="text-white font-bold capitalize">{currentPreset.type.replace('_', ' ')}</div>
+                </div>
+                <div className="bg-black/20 p-2 rounded">
+                  <div className="text-gray-500 text-[9px] uppercase">Tick Currency</div>
+                  <div className="text-white font-bold">{currentPreset.currency}</div>
+                </div>
+                <div className="bg-black/20 p-2 rounded col-span-2">
+                  <div className="text-gray-500 text-[9px] uppercase">Auto Sizing Formula</div>
+                  <div className="text-gray-300 text-[10px] mt-0.5">
+                    {currentPreset.type === 'index_option' 
+                      ? `Suggested Lots = Math.floor(Risk / (${finalSLPoints} Points * ${customLotSize} Lot Size))`
+                      : currentPreset.type === 'crypto'
+                      ? `Suggested Quantity = Risk / (${finalSLPoints} Points * ${tickValue} Tick)`
+                      : `Suggested Lots = Risk / (${finalSLPoints} Points * ${customLotSize} Lot Size * ${tickValue} Tick)`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sizing Results Column */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="terminal-card p-6 bg-terminal-accent/5 border-terminal-accent/30 space-y-6">
+              <div className="flex items-center justify-between border-b border-terminal-border/30 pb-3">
+                <span className="text-xs font-mono text-terminal-accent uppercase tracking-widest font-bold">Calculation Results</span>
+                <span className="text-[10px] font-mono text-gray-500 uppercase">
+                  Account Base: <strong className="text-white">{accountCurrency}</strong>
+                </span>
+              </div>
+
+              {/* Major size metric */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-gray-500 uppercase block">SUGGESTED QUANTITY</span>
+                  <div className="text-3xl font-black text-white font-mono flex items-baseline">
+                    <span>
+                      {currentPreset.type === 'commodity' 
+                        ? `${actualUnits.toLocaleString()} oz` 
+                        : actualUnits.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                    </span>
+                    <span className="text-xs text-gray-500 ml-1.5 uppercase tracking-wide">
+                      {currentPreset.type === 'index_option' ? 'Units' : currentPreset.symbol.replace('USDT', '')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-gray-500 uppercase block">SUGGESTED LOT SIZE</span>
+                  <div className="text-3xl font-black text-terminal-accent font-mono">
+                    {currentPreset.type === 'index_option' ? (
+                      <>
+                        {recommendedLots} <span className="text-xs text-gray-500 uppercase font-bold">Lots</span>
+                      </>
+                    ) : currentPreset.type === 'commodity' ? (
+                      <>
+                        {recommendedLots} <span className="text-xs text-gray-500 uppercase font-bold">Std Lots</span>
+                      </>
+                    ) : (
+                      <>
+                        {recommendedLots} <span className="text-xs text-gray-500 uppercase font-bold">Lots</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Secondary stats grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-terminal-border/20">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-mono text-gray-500 uppercase block">Notional Trade Value</span>
+                  <div className="text-sm font-bold text-white font-mono">
+                    {accountSymbol}{Math.round(notionalValueInAccount).toLocaleString()}
+                  </div>
+                  <span className="text-[8px] font-mono text-gray-600 block">
+                    {instSymbol}{Math.round(notionalValue).toLocaleString()} in Preset
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[9px] font-mono text-gray-500 uppercase block">Actual Risk Exposure</span>
+                  <div className="text-sm font-bold text-terminal-red font-mono">
+                    {accountSymbol}{actualRiskInAccount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-[8px] font-mono text-gray-600 block">
+                    {((actualRiskInAccount / capital) * 100 || 0).toFixed(2)}% of Account
+                  </span>
+                </div>
+
+                <div className="space-y-1 col-span-2 md:col-span-1">
+                  <span className="text-[9px] font-mono text-gray-500 uppercase block">R:R Ratio / Potential Reward</span>
+                  <div className="text-sm font-bold text-terminal-green font-mono">
+                    1:{rrRatio} ({accountSymbol}{Math.round(potentialRewardInAccount).toLocaleString()})
+                  </div>
+                  <span className="text-[8px] font-mono text-gray-600 block">
+                    At take profit price level
+                  </span>
+                </div>
+              </div>
+
+              {/* Leverage context / Warning */}
+              {leverageRatio > 1 && (
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded p-3 flex items-start space-x-2.5">
+                  <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] font-mono font-bold text-orange-500 uppercase">Leveraged Position Warning</div>
+                    <p className="text-[9px] font-mono text-gray-400 leading-normal uppercase">
+                      Position value ({accountSymbol}{Math.round(notionalValueInAccount).toLocaleString()}) exceeds total capital. 
+                      Requires <strong className="text-white">{leverageRatio.toFixed(1)}x</strong> margin/leverage. Ensure proper broker margin settings.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Copyable JSON Explorer */}
+            <div className="terminal-card p-4 border-terminal-border/40 space-y-3">
+              <div className="flex items-center justify-between border-b border-terminal-border/20 pb-2">
+                <span className="text-[10px] font-mono text-terminal-accent uppercase tracking-widest font-bold">API Calculation JSON Output</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(apiResponse, null, 2));
+                  }}
+                  className="px-2 py-0.5 text-[9px] font-mono rounded bg-terminal-accent/10 hover:bg-terminal-accent/20 text-terminal-accent border border-terminal-accent/30 transition-all uppercase"
+                >
+                  Copy JSON Response
+                </button>
+              </div>
+              <pre className="text-[9px] font-mono text-gray-300 bg-black/60 p-3 rounded max-h-56 overflow-y-auto leading-relaxed border border-terminal-border/20 whitespace-pre-wrap">
+                {JSON.stringify(apiResponse, null, 2)}
+              </pre>
+            </div>
+
+            {/* Smart Risk Tips */}
             <div className="terminal-card p-4 border-terminal-accent/20">
               <div className="flex items-start space-x-3">
-                <Shield className="w-4 h-4 text-terminal-accent mt-0.5" />
-                <p className="text-[10px] font-mono text-gray-400 leading-relaxed uppercase">
-                  Strategy: Never risk more than <span className="text-white">2%</span> of your capital on a single trade. 
-                  Always trade with a defined <span className="text-white">Stop Loss</span>.
-                </p>
+                <ShieldCheck className="w-5 h-5 text-terminal-accent shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-gray-300 uppercase font-bold block">Professional Trading Safeguard Rules</span>
+                  <p className="text-[9px] font-mono text-gray-400 leading-relaxed uppercase">
+                    1. Keep maximum systematic risk per trade below <span className="text-white font-bold">2.0%</span>.<br />
+                    2. For highly volatile assets like <span className="text-white">Bitcoin</span> or <span className="text-white">Gold</span>, reduce risk budget to <span className="text-white font-bold">0.5%</span>.<br />
+                    3. Do not adjust your stop loss once the position has been initiated. Let the cycle complete.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -2965,10 +3839,10 @@ export default function App() {
   const menuItems = [
     { label: 'HOME', icon: Monitor, view: 'landing' },
     { label: 'TRADING TERMINAL', icon: Activity, view: 'dashboard' },
+    { label: 'TRADING JOURNAL', icon: BookOpen, view: 'journal' },
     { label: 'BACKTEST LAB', icon: Calculator, view: 'backtest' },
     { label: 'O.I ANALYSIS', icon: BarChart3, view: 'oi' },
     { label: 'INDICATORS', icon: LineChart, view: 'indicators' },
-    { label: 'RISK MANAGEMENT', icon: Shield, view: 'risk' },
     { label: 'GANN SCALPING', icon: Target, view: 'gann' },
   ];
 
@@ -3271,6 +4145,8 @@ export default function App() {
           <RedeemSuccessPage />
         ) : view === 'user-management' ? (
           <UserManagement />
+        ) : view === 'journal' ? (
+          <TradingJournalMain />
         ) : null}
       </main>
 

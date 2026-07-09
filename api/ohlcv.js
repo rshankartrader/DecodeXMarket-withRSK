@@ -36,9 +36,6 @@ export default async function handler(req, res) {
     const quote = result.indicators?.quote?.[0] || {};
     const { high = [], low = [], close = [], open = [], volume = [] } = quote;
 
-    // Round to 1 decimal place; keep null as null instead of turning it into NaN
-    const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
-    
     const candles = timestamps
       .map((time, i) => ({
         time, // unix seconds — matches `new Date(candle.time * 1000)` in the component

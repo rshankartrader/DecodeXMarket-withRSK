@@ -31,8 +31,9 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          request.auth.token.email == "rshankartrader@gmail.com");
+        (request.auth.token.email == "rshankartrader@gmail.com" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function isValidEmail(email) {
@@ -88,6 +89,17 @@ service cloud.firestore {
       
       // Only admins can delete profiles
       allow delete: if isAdmin();
+    }
+
+    // Trading Journal Subcollections (Defined flat for robust variable scope and binding)
+    match /users/{userId}/trades/{tradeId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    match /users/{userId}/psychology/{logId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    match /users/{userId}/rules/{ruleId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
 
     // Default deny for all other collections

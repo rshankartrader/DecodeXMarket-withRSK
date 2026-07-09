@@ -258,7 +258,6 @@ export default function PlanetaryRetrogrades() {
                 <AlertTriangle className="w-4 h-4 mt-0.5 text-red-500 animate-bounce flex-shrink-0" />
                 <div>
                   <span className="font-black block uppercase tracking-wider">⚠️ System Alert: {activeRetrogrades.length} Retrogrades Active Today</span>
-                  <span className="text-[10px] text-gray-400">Trading during multi-retrograde periods usually exhibits decreased liquidity, false breakouts, and high whipsaw rates.</span>
                 </div>
               </div>
 

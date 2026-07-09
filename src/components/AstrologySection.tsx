@@ -222,20 +222,51 @@ export default function AstrologySection({ isAdmin = false }: AstrologySectionPr
         summaryParts.push("No major celestial triggers are active today. The cosmic grid is in a neutral state, supporting steady consolidation.");
       }
 
+      // 1. TODAY'S COSMIC WINDOWS INTERPRETATION (short text)
+      const todayInterpretation = summaryParts.length > 0 
+        ? `Today's market dynamics are shaped by ${summaryParts.length} active celestial alignment(s). ` +
+          (cosmicWindows.activePanchak || cosmicWindows.activeAmavasya 
+            ? "Reversal pressures are currently elevated due to active Panchak/Amavasya structures, necessitating conservative position sizing." 
+            : "The current grid is moderately supportive of established intraday trends, guided by minor lunar/mercury alignments.")
+        : "The cosmic grid is completely quiet today, leading to neutral consolidations and low-volatility sideways range play.";
+
+      // 2. UPCOMING INGRESSES INTERPRETATION (short text)
+      let upcomingIngressInterpretation = "No major upcoming planetary sign entries detected in the immediate forecast window.";
+      if (cosmicWindows.upcomingIngresses && cosmicWindows.upcomingIngresses.length > 0) {
+        const ingressesText = cosmicWindows.upcomingIngresses.map((ing: any) => 
+          `**${ing.planet}** entering **${ing.sign}** on *${ing.date}* (${ing.marketImpact || "Sector rotation"})`
+        ).join(", ");
+        upcomingIngressInterpretation = `The near-term pipeline contains major sector-shifting ingresses: ${ingressesText}. Expect capital re-allocation across thematic indices as these transit dates approach.`;
+      }
+
+      // 3. UPCOMING TRANSITS INTERPRETATION (short text)
+      let upcomingTransitInterpretation = "No major upcoming transit aspects identified in the near-term ephemeris.";
+      if (cosmicWindows.upcomingAspects && cosmicWindows.upcomingAspects.length > 0) {
+        const transitsText = cosmicWindows.upcomingAspects.map((asp: any) => 
+          `**${asp.planet1}** ${asp.aspectType || "aspecting"} **${asp.planet2}** on *${asp.date}* (${asp.interpretation || "Trend shift"})`
+        ).join(", ");
+        upcomingTransitInterpretation = `Watch key incoming planetary alignments for exact intraday cycle turns: ${transitsText}. These geometric aspects represent high-probability support/resistance breakout levels.`;
+      }
+
       // Derive final biases based on scores
       const niftyBias = niftyScore > 0 ? "BULLISH" : niftyScore < -1 ? "BEARISH" : niftyScore === 0 ? "NEUTRAL" : "VOLATILE";
       const goldBias = goldScore > 1 ? "BULLISH" : goldScore < 0 ? "BEARISH" : goldScore === 0 ? "NEUTRAL" : "VOLATILE";
 
-      const reply = `### 🌌 Cosmic Alignment & Market Analysis
+      const reply = `### 🌌 Today's Cosmic Windows Interpretation
+${todayInterpretation}
 
-${summaryParts.map(p => `• ${p}`).join("\n")}
+### ☄️ Upcoming Ingresses Interpretation
+${upcomingIngressInterpretation}
+
+### ☉ Upcoming Transits & Aspects Interpretation
+${upcomingTransitInterpretation}
 
 ---
 
 ### 📊 Astro-Financial Market Bias
 
 #### 🇮🇳 Nifty 50: **${niftyBias}**
-The astrological indicators suggest a **${niftyBias.toLowerCase()}** outlook for Nifty 50. ${
+Outlook: **${niftyBias}**. ${
         niftyBias === "BULLISH" ? "Positive planetary ingress dates and supportive moon cycle coordinates favor short-term upward continuation." :
         niftyBias === "BEARISH" ? "Active Panchak/Amavasya structures suggest extreme trend-exhaustion. Keep tight stop-losses on long positions as reversal risks are highly elevated." :
         niftyBias === "VOLATILE" ? "The convergence of competing lunar and retrograde forces suggests dynamic, two-sided intraday volatility." :
@@ -243,7 +274,7 @@ The astrological indicators suggest a **${niftyBias.toLowerCase()}** outlook for
       }
 
 #### 🟡 Gold (XAU/USD): **${goldBias}**
-Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yellow metal. ${
+Outlook: **${goldBias}**. ${
         goldBias === "BULLISH" ? "As the metal of the Sun, Gold is highly favored today. Increased safe-haven seeking during volatile retrogrades/Panchak cycles supports steady accumulation." :
         goldBias === "BEARISH" ? "Lack of positive solar-venus aspects could lead to short-term profit-taking and technical consolidations." :
         "Gold prices are expected to remain tightly bound within existing geometric support levels, waiting for the next solar cycle ingress."
@@ -602,6 +633,9 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
     const nextAspects = aspectsListToUse.filter(item => new Date(item.date) > todayVal)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const nextAspect = nextAspects[0];
+
+    const upcomingIngresses = nextIngresses.slice(0, 3);
+    const upcomingAspects = nextAspects.slice(0, 3);
     
     return {
       activeMoonAlignment,
@@ -616,8 +650,10 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
       nextRetrograde,
       activeIngress,
       nextIngress,
+      upcomingIngresses,
       activeAspect,
-      nextAspect
+      nextAspect,
+      upcomingAspects
     };
   }, [todayVal, todayStrVal, cycleInputDate, cyclePlanet, show90, show180, show270, useDefaultLen, cycleLenCustom]);
 
@@ -1876,17 +1912,27 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
               });
 
               if (panchakLow === Infinity) panchakLow = 0;
-              const range = parseFloat((panchakHigh - panchakLow).toFixed(2));
+              const range = parseFloat((panchakHigh - panchakLow).toFixed(1));
 
               // Up Targets
-              const tUp1 = parseFloat((panchakHigh + range * 0.61).toFixed(2));
-              const tUp2 = parseFloat((panchakHigh + range * 1.38).toFixed(2));
-              const tUp3 = parseFloat((panchakHigh + range * 2.00).toFixed(2));
+              const tUp1 = parseFloat((panchakHigh + range * 0.61).toFixed(1));
+              const tUp2 = parseFloat((panchakHigh + range * 1.38).toFixed(1));
+              const tUp3 = parseFloat((panchakHigh + range * 2.00).toFixed(1));
 
               // Down Targets
-              const tDn1 = parseFloat((panchakLow - range * 0.61).toFixed(2));
-              const tDn2 = parseFloat((panchakLow - range * 1.38).toFixed(2));
-              const tDn3 = parseFloat((panchakLow - range * 2.00).toFixed(2));
+              const tDn1 = parseFloat((panchakLow - range * 0.61).toFixed(1));
+              const tDn2 = parseFloat((panchakLow - range * 1.38).toFixed(1));
+              const tDn3 = parseFloat((panchakLow - range * 2.00).toFixed(1));
+
+              const formattedPanchakHigh = panchakHigh ? panchakHigh.toFixed(1) : "N/A";
+              const formattedPanchakLow = (panchakLow && panchakLow !== Infinity) ? panchakLow.toFixed(1) : "N/A";
+              const formattedRange = range ? range.toFixed(1) : "N/A";
+              const formattedTUp1 = tUp1 ? tUp1.toFixed(1) : "N/A";
+              const formattedTUp2 = tUp2 ? tUp2.toFixed(1) : "N/A";
+              const formattedTUp3 = tUp3 ? tUp3.toFixed(1) : "N/A";
+              const formattedTDn1 = tDn1 ? tDn1.toFixed(1) : "N/A";
+              const formattedTDn2 = tDn2 ? tDn2.toFixed(1) : "N/A";
+              const formattedTDn3 = tDn3 ? tDn3.toFixed(1) : "N/A";
 
               return (
                 <div className="space-y-4 h-full flex flex-col justify-between">
@@ -1898,8 +1944,8 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
                       </span>
                       <span className={`text-[8px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
                         isUsingRealData 
-                          ? "bg-terminal-green/10 text-terminal-green border border-terminal-green/20" 
-                          : "bg-terminal-red/10 text-terminal-red border border-terminal-red/20"
+                           ? "bg-terminal-green/10 text-terminal-green border border-terminal-green/20" 
+                           : "bg-terminal-red/10 text-terminal-red border border-terminal-red/20"
                       }`}>
                         {isUsingRealData ? "LIVE FEED ACTIVE" : "LIVE FEED INACTIVE"}
                       </span>
@@ -1910,15 +1956,15 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
                       <div className="grid grid-cols-3 gap-2 bg-black/40 p-2.5 rounded border border-white/5 font-mono text-[10px]">
                         <div className="text-center">
                           <span className="text-gray-500 uppercase text-[8px] block">Panchak High</span>
-                          <span className="font-bold text-terminal-green text-xs">{panchakHigh || "N/A"}</span>
+                          <span className="font-bold text-terminal-green text-xs">{formattedPanchakHigh}</span>
                         </div>
                         <div className="text-center border-x border-white/5">
                           <span className="text-gray-500 uppercase text-[8px] block">Panchak Low</span>
-                          <span className="font-bold text-terminal-red text-xs">{panchakLow || "N/A"}</span>
+                          <span className="font-bold text-terminal-red text-xs">{formattedPanchakLow}</span>
                         </div>
                         <div className="text-center">
                           <span className="text-gray-500 uppercase text-[8px] block">Target Range</span>
-                          <span className="font-bold text-terminal-accent text-xs">{range || "N/A"}</span>
+                          <span className="font-bold text-terminal-accent text-xs">{formattedRange}</span>
                         </div>
                       </div>
 
@@ -1928,20 +1974,20 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-[9px] font-mono text-terminal-green font-bold uppercase">
                             <span>Bullish Reversals / Targets</span>
-                            <span>Trigger: &gt; {panchakHigh}</span>
+                            <span>Trigger: &gt; {formattedPanchakHigh}</span>
                           </div>
                           <div className="grid grid-cols-3 gap-2">
                             <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
                               <span className="text-[8px] font-mono text-gray-500 block">T1 (61%)</span>
-                              <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp1}</span>
+                              <span className="text-[11px] font-bold text-terminal-green font-mono">{formattedTUp1}</span>
                             </div>
                             <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
                               <span className="text-[8px] font-mono text-gray-500 block">T2 (138%)</span>
-                              <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp2}</span>
+                              <span className="text-[11px] font-bold text-terminal-green font-mono">{formattedTUp2}</span>
                             </div>
                             <div className="bg-terminal-green/5 border border-terminal-green/20 p-2 rounded text-center">
                               <span className="text-[8px] font-mono text-gray-500 block">T3 (200%)</span>
-                              <span className="text-[11px] font-bold text-terminal-green font-mono">{tUp3}</span>
+                              <span className="text-[11px] font-bold text-terminal-green font-mono">{formattedTUp3}</span>
                             </div>
                           </div>
                         </div>
@@ -1950,20 +1996,20 @@ Our orbital vectors show a **${goldBias.toLowerCase()}** alignment for the yello
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-[9px] font-mono text-terminal-red font-bold uppercase">
                             <span>Bearish Reversals / Targets</span>
-                            <span>Trigger: &lt; {panchakLow}</span>
+                            <span>Trigger: &lt; {formattedPanchakLow}</span>
                           </div>
                           <div className="grid grid-cols-3 gap-2">
                             <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
                               <span className="text-[8px] font-mono text-gray-500 block">T1 (61%)</span>
-                              <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn1}</span>
+                              <span className="text-[11px] font-bold text-terminal-red font-mono">{formattedTDn1}</span>
                             </div>
                             <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
                               <span className="text-[8px] font-mono text-gray-500 block">T2 (138%)</span>
-                              <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn2}</span>
+                              <span className="text-[11px] font-bold text-terminal-red font-mono">{formattedTDn2}</span>
                             </div>
                             <div className="bg-terminal-red/5 border border-terminal-red/20 p-2 rounded text-center">
                               <span className="text-[8px] font-mono text-gray-500 block">T3 (200%)</span>
-                              <span className="text-[11px] font-bold text-terminal-red font-mono">{tDn3}</span>
+                              <span className="text-[11px] font-bold text-terminal-red font-mono">{formattedTDn3}</span>
                             </div>
                           </div>
                         </div>

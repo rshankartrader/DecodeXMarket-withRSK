@@ -45,6 +45,8 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   updatePassword,
+  GoogleAuthProvider,
+  signInWithPopup,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -234,6 +236,70 @@ const AuthPage = ({ onAuthSuccess, initialMode = 'login' }: { onAuthSuccess: () 
       }
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+      
+      // Check if user's document exists in Firestore
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (!userDocSnap.exists()) {
+        const generatedCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const userDoc = {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || 'Google User',
+          role: user.email === 'rshankartrader@gmail.com' ? 'admin' : 'user',
+          accessLevel: 0, // Level 0: Registered (30-day trial)
+          accessCode: generatedCode,
+          createdAt: Timestamp.now(),
+          lastLogin: Timestamp.now()
+        };
+        await setDoc(userDocRef, userDoc);
+        
+        // Notify Admin
+        fetch('/api/admin/notify-registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userEmail: user.email,
+            userName: user.displayName || 'Google User',
+            userUid: user.uid,
+            accessCode: generatedCode
+          })
+        }).catch(err => console.error("Failed to notify admin:", err));
+      } else {
+        // Doc exists, check if user is locked
+        if (userDocSnap.data().isLocked) {
+          await signOut(auth);
+          setError("Your access to the terminal has been locked by the administrator. Please contact support.");
+          setLoading(false);
+          return;
+        }
+        await updateDoc(userDocRef, {
+          lastLogin: Timestamp.now()
+        }).catch(e => console.error("Could not update lastLogin:", e));
+      }
+      onAuthSuccess();
+    } catch (err: any) {
+      console.error("Google Auth error:", err);
+      if (err.code === 'auth/network-request-failed') {
+        setError(`Network error: This usually happens if the domain '${window.location.hostname}' is not added to 'Authorized Domains' in the Firebase Console. Please check settings.`);
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setError("Sign-in popup closed before completion. Please try again.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -528,6 +594,31 @@ const AuthPage = ({ onAuthSuccess, initialMode = 'login' }: { onAuthSuccess: () 
                 )}
               </button>
 
+              {(mode === 'login' || mode === 'register') && (
+                <>
+                  <div className="relative flex py-2 items-center">
+                    <div className="flex-grow border-t border-terminal-border/20"></div>
+                    <span className="flex-shrink mx-4 text-[9px] font-mono text-gray-500 uppercase tracking-widest">OR</span>
+                    <div className="flex-grow border-t border-terminal-border/20"></div>
+                  </div>
+
+                  <button 
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                    className="w-full py-4 bg-black/40 hover:bg-black/60 text-white rounded-lg border border-terminal-border hover:border-terminal-accent/50 font-bold text-xs uppercase tracking-[0.1em] transition-all flex items-center justify-center space-x-2"
+                  >
+                    <svg className="w-4 h-4 text-white" viewBox="0 0 24 24">
+                      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span>Login with Google</span>
+                  </button>
+                </>
+              )}
+
               {mode === 'forgot-password' && (
                 <button 
                   type="button"
@@ -782,6 +873,7 @@ export default function App() {
   const [selectedPlanDetail, setSelectedPlanDetail] = useState<{ id: string; name: string; price: number; originalPrice: number; discount: number } | null>(null);
   const [redeemDuration, setRedeemDuration] = useState<string>('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showLinksModal, setShowLinksModal] = useState(false);
   const [data, setData] = useState<MarketData>(MOCK_DATA);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -3843,7 +3935,7 @@ export default function App() {
     { label: 'BACKTEST LAB', icon: Calculator, view: 'backtest' },
     { label: 'O.I ANALYSIS', icon: BarChart3, view: 'oi' },
     { label: 'INDICATORS', icon: LineChart, view: 'indicators' },
-    { label: 'GANN SCALPING', icon: Target, view: 'gann' },
+    { label: 'IMPORTANT LINKS', icon: Info, view: 'links', onClick: () => { setShowLinksModal(true); setIsMenuOpen(false); } },
   ];
 
   return (
@@ -3974,7 +4066,9 @@ export default function App() {
                   <button 
                     key={item.label}
                     onClick={() => {
-                      if (item.view === 'landing') {
+                      if (item.onClick) {
+                        item.onClick();
+                      } else if (item.view === 'landing') {
                         setView('landing');
                         setIsMenuOpen(false);
                       } else {
@@ -4250,6 +4344,152 @@ export default function App() {
 
       {/* Astro AI Floating Copilot */}
       {view === 'dashboard' && dashboardTab === 'astrology' && <AstroAiChat />}
+
+      {/* Important Links Modal */}
+      <AnimatePresence>
+        {showLinksModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLinksModal(false)}
+              className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg bg-terminal-card border border-terminal-border rounded-lg shadow-2xl overflow-hidden"
+              >
+                {/* Modal Header */}
+                <div className="terminal-header bg-terminal-bg/50 border-b border-terminal-border p-4 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Globe className="w-4 h-4 text-terminal-accent" />
+                    <span className="text-xs font-mono uppercase tracking-widest text-white font-bold">IMPORTANT REQUISITE LINKS</span>
+                  </div>
+                  <button 
+                    onClick={() => setShowLinksModal(false)}
+                    className="text-gray-400 hover:text-white font-mono text-[10px] uppercase border border-terminal-border/40 px-2 py-0.5 rounded hover:bg-white/5 transition-all cursor-pointer"
+                  >
+                    CLOSE [X]
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-6 space-y-4">
+                  <div className="text-xs text-gray-400 font-mono leading-relaxed mb-2 uppercase tracking-wide">
+                    Access critical exchange resources, regulatory redress portals, and community-curated technical setups.
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {/* Link item 1 */}
+                    <a 
+                      href="https://scores.sebi.gov.in" 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="group flex items-center justify-between p-3 rounded bg-black/20 border border-terminal-border hover:border-terminal-accent/40 hover:bg-terminal-accent/5 transition-all"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="p-1.5 rounded bg-terminal-red/10 group-hover:bg-terminal-red/20 text-terminal-red transition-colors">
+                          <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white font-mono uppercase group-hover:text-terminal-accent transition-colors">SEBI SCORES Portal</span>
+                          <span className="text-[9px] text-gray-500 font-mono uppercase">Lodge & Track Official Investor Complaints</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors" />
+                    </a>
+
+                    {/* Link item 2 */}
+                    <a 
+                      href="https://www.nseindia.com" 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="group flex items-center justify-between p-3 rounded bg-black/20 border border-terminal-border hover:border-terminal-accent/40 hover:bg-terminal-accent/5 transition-all"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="p-1.5 rounded bg-terminal-accent/10 group-hover:bg-terminal-accent/20 text-terminal-accent transition-colors">
+                          <Activity className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white font-mono uppercase group-hover:text-terminal-accent transition-colors">NSE India (National Stock Exchange)</span>
+                          <span className="text-[9px] text-gray-500 font-mono uppercase">Official Derivatives, Option Chain & Live LTP Data</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors" />
+                    </a>
+
+                    {/* Link item 3 */}
+                    <a 
+                      href="https://www.tradingview.com" 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="group flex items-center justify-between p-3 rounded bg-black/20 border border-terminal-border hover:border-terminal-accent/40 hover:bg-terminal-accent/5 transition-all"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="p-1.5 rounded bg-blue-500/10 group-hover:bg-blue-500/20 text-blue-400 transition-colors">
+                          <BarChart3 className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white font-mono uppercase group-hover:text-terminal-accent transition-colors">TradingView Live Charts</span>
+                          <span className="text-[9px] text-gray-500 font-mono uppercase">Advanced Technical Analysis & Multi-Asset Plotting</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors" />
+                    </a>
+
+                    {/* Link item 4 */}
+                    <a 
+                      href="https://www.moneycontrol.com" 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="group flex items-center justify-between p-3 rounded bg-black/20 border border-terminal-border hover:border-terminal-accent/40 hover:bg-terminal-accent/5 transition-all"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="p-1.5 rounded bg-yellow-500/10 group-hover:bg-yellow-500/20 text-yellow-500 transition-colors">
+                          <Newspaper className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white font-mono uppercase group-hover:text-terminal-accent transition-colors">Moneycontrol Market Feed</span>
+                          <span className="text-[9px] text-gray-500 font-mono uppercase">Breaking News, Corporate Filings & Institutional Reports</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors" />
+                    </a>
+
+                    {/* Link item 5 */}
+                    <a 
+                      href="https://wa.me/918271890090" 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="group flex items-center justify-between p-3 rounded bg-black/20 border border-terminal-border hover:border-terminal-accent/40 hover:bg-terminal-accent/5 transition-all"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="p-1.5 rounded bg-terminal-green/10 group-hover:bg-terminal-green/20 text-terminal-green transition-colors">
+                          <MessageSquare className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white font-mono uppercase group-hover:text-terminal-accent transition-colors">WhatsApp Trader Support</span>
+                          <span className="text-[9px] text-gray-500 font-mono uppercase">Connect Directly with Dr. Ravi Shankar Kumar</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Footer Notes */}
+                <div className="bg-terminal-bg/80 border-t border-terminal-border p-3.5 text-center text-[9px] font-mono text-gray-500 uppercase">
+                  Please consult professional regulatory disclosures prior to execution.
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

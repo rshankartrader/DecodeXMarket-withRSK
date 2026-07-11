@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Newspaper, 
@@ -30,6 +30,7 @@ export default function StockMarketNewsSection() {
   const [filter, setFilter] = useState<"ALL" | "INDIAN MARKETS" | "GLOBAL MACROS" | "FII/DII FLOWS" | "CORPORATE">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [news, setNews] = useState<NewsItem[]>([
     {
@@ -71,44 +72,33 @@ export default function StockMarketNewsSection() {
       sentiment: "BULLISH",
       impact: "MEDIUM",
       summary: "Brent crude falls below $78 a barrel. Lower energy costs act as a massive structural tailwind for Indian macros, lowering oil import bills and supporting INR."
-    },
-    {
-      id: "news-5",
-      title: "Reliance Industries announces ₹75,000 Cr green energy expansion roadmap",
-      source: "Company Filing",
-      time: "3 hours ago",
-      category: "CORPORATE",
-      sentiment: "BULLISH",
-      impact: "HIGH",
-      summary: "RIL green energy initiative gets board approval. Plans to set up 4 gigafactories in Gujarat. Stock surges 2.4% in morning trade, lifting heavyweights."
-    },
-    {
-      id: "news-6",
-      title: "SEBI proposes tightening derivatives framework to curb excessive retail speculation",
-      source: "SEBI",
-      time: "4 hours ago",
-      category: "INDIAN MARKETS",
-      sentiment: "BEARISH",
-      impact: "HIGH",
-      summary: "The market regulator suggests raising minimum lot sizes for index options and limiting weekly expiries per exchange. Analysts expect volumes to contract temporarily."
-    },
-    {
-      id: "news-7",
-      title: "HDFC Bank posts 12% YoY loan growth, net interest margins (NIM) stabilize",
-      source: "Press Release",
-      time: "5 hours ago",
-      category: "CORPORATE",
-      sentiment: "BULLISH",
-      impact: "MEDIUM",
-      summary: "Credit growth maintains steady trajectory. NPA levels remain low at 1.12%, giving the banking heavyweights structural tailwinds for upward continuation."
     }
   ]);
 
-  const handleRefresh = () => {
+  const fetchLiveNews = async () => {
+    try {
+      const response = await fetch("/api/news");
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setNews(data);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch live news:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveNews();
+  }, []);
+
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1200);
+    await fetchLiveNews();
+    setIsRefreshing(false);
   };
 
   const filteredNews = news.filter((item) => {

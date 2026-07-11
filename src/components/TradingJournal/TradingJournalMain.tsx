@@ -65,6 +65,11 @@ export const TradingJournalMain: React.FC = () => {
   // Account Balance state
   const [accountBalance, setAccountBalance] = useState<number>(500000);
   const [initialBalance, setInitialBalance] = useState<number>(500000);
+  const [userRole, setUserRole] = useState<string>('user');
+
+  // Spreadsheet sync states
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState<string>('');
+  const [autoSync, setAutoSync] = useState<boolean>(false);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +104,15 @@ export const TradingJournalMain: React.FC = () => {
         }
         if (data.journalInitialBalance !== undefined) {
           setInitialBalance(Number(data.journalInitialBalance));
+        }
+        if (data.spreadsheetUrl !== undefined) {
+          setSpreadsheetUrl(data.spreadsheetUrl);
+        }
+        if (data.spreadsheetAutoSync !== undefined) {
+          setAutoSync(!!data.spreadsheetAutoSync);
+        }
+        if (data.role !== undefined) {
+          setUserRole(data.role);
         }
       }
     });
@@ -186,6 +200,77 @@ export const TradingJournalMain: React.FC = () => {
     }
   };
 
+  const handleUpdateInitialBalance = async (newInitial: number) => {
+    try {
+      await setDoc(doc(db, 'users', userId), {
+        journalInitialBalance: newInitial
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${userId}`);
+    }
+  };
+
+  const SPREADSHEET_URL = 'https://script.google.com/macros/s/AKfycbzFRYE22jfaiH_dST-M21GCKNkEmoppFEfh92TnJE174PEV0oJALXS7MFXe462wLHAX/exec';
+
+  const syncTradeToSpreadsheet = async (action: 'save_trade' | 'delete_trade', payload: any) => {
+    try {
+      const body = {
+        action,
+        userId: currentUser?.uid || 'Unknown',
+        userEmail: currentUser?.email || 'Anonymous',
+        ...payload
+      };
+      const targetUrl = spreadsheetUrl || SPREADSHEET_URL;
+      await fetch(targetUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {
+      console.error("Spreadsheet sync error:", e);
+    }
+  };
+
+  const syncAllToSpreadsheet = async (tradesList: Trade[]): Promise<boolean> => {
+    try {
+      const body = {
+        action: 'sync_all',
+        userId: currentUser?.uid || 'Unknown',
+        userEmail: currentUser?.email || 'Anonymous',
+        trades: tradesList
+      };
+      const targetUrl = spreadsheetUrl || SPREADSHEET_URL;
+      await fetch(targetUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      return true;
+    } catch (e) {
+      console.error("Spreadsheet sync all error:", e);
+      return false;
+    }
+  };
+
+  const handleUpdateSpreadsheetConfig = async (url: string, enabled: boolean) => {
+    try {
+      await setDoc(doc(db, 'users', userId), {
+        spreadsheetUrl: url,
+        spreadsheetAutoSync: enabled
+      }, { merge: true });
+      setSpreadsheetUrl(url);
+      setAutoSync(enabled);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${userId}/spreadsheet`);
+    }
+  };
+
+  const handleSyncAllToSpreadsheet = async (): Promise<boolean> => {
+    return await syncAllToSpreadsheet(trades);
+  };
+
   const handleResetJournal = async (startingBalance: number) => {
     try {
       // 1. Delete all trades
@@ -201,6 +286,8 @@ export const TradingJournalMain: React.FC = () => {
         journalBalance: startingBalance,
         journalInitialBalance: startingBalance
       }, { merge: true });
+
+      await syncAllToSpreadsheet([]);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${userId}/reset`);
     }
@@ -210,11 +297,18 @@ export const TradingJournalMain: React.FC = () => {
   const handleAddTrade = async (trade: Omit<Trade, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     const tradesPath = `users/${userId}/trades`;
     try {
-      await addDoc(collection(db, 'users', userId, 'trades'), {
+      const docRef = await addDoc(collection(db, 'users', userId, 'trades'), {
         ...trade,
         userId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
+      });
+
+      syncTradeToSpreadsheet('save_trade', {
+        trade: {
+          id: docRef.id,
+          ...trade
+        }
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, tradesPath);
@@ -228,6 +322,17 @@ export const TradingJournalMain: React.FC = () => {
         ...trade,
         updatedAt: serverTimestamp()
       });
+
+      const fullTrade = trades.find(t => t.id === id);
+      if (fullTrade) {
+        syncTradeToSpreadsheet('save_trade', {
+          trade: {
+            ...fullTrade,
+            ...trade,
+            id
+          }
+        });
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, tradesPath);
     }
@@ -237,6 +342,10 @@ export const TradingJournalMain: React.FC = () => {
     const tradesPath = `users/${userId}/trades/${id}`;
     try {
       await deleteDoc(doc(db, 'users', userId, 'trades', id));
+
+      syncTradeToSpreadsheet('delete_trade', {
+        tradeId: id
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, tradesPath);
     }
@@ -283,8 +392,7 @@ export const TradingJournalMain: React.FC = () => {
           { id: 'trades', label: 'Trade Log', icon: BookOpen },
           { id: 'analytics', label: 'Diagnostics & Stats', icon: BarChart3 },
           { id: 'calendar', label: 'P&L Calendar', icon: Calendar },
-          { id: 'risk', label: 'Risk Calculator', icon: Shield },
-          { id: 'rules', label: 'Rules & Checklists', icon: ShieldCheck }
+          { id: 'risk', label: 'Risk Calculator', icon: Shield }
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -321,7 +429,13 @@ export const TradingJournalMain: React.FC = () => {
             accountBalance={accountBalance}
             initialBalance={initialBalance}
             onUpdateBalance={handleUpdateBalance}
+            onUpdateInitialBalance={handleUpdateInitialBalance}
             onResetJournal={handleResetJournal}
+            spreadsheetUrl={spreadsheetUrl}
+            autoSync={autoSync}
+            onUpdateSpreadsheetConfig={handleUpdateSpreadsheetConfig}
+            onSyncAllToSpreadsheet={handleSyncAllToSpreadsheet}
+            isAdmin={currentUser?.email === 'rshankartrader@gmail.com' || userRole === 'admin'}
           />
         ) : activeTab === 'trades' ? (
           <TradeLog 
@@ -338,13 +452,6 @@ export const TradingJournalMain: React.FC = () => {
           <RiskManagement 
             initialCapital={accountBalance}
             onCapitalChange={handleUpdateBalance}
-          />
-        ) : activeTab === 'rules' ? (
-          <Rules 
-            rules={rules}
-            onAddRule={handleAddRule}
-            onToggleRule={handleToggleRule}
-            onDeleteRule={handleDeleteRule}
           />
         ) : null}
       </div>

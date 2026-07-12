@@ -169,161 +169,38 @@ export default function AstrologySection({ isAdmin = false }: AstrologySectionPr
   }, [showAstroAiPanel]);
 
   const handleRunTodayAstroAi = async () => {
-    const buildLocalReport = () => {
-      const cosmicWindows = aggregatedCosmicWindows;
-      const activeWindowsCount = 
-        (cosmicWindows.activeMoonAlignment ? 1 : 0) +
-        (cosmicWindows.activeMercAlignment ? 1 : 0) +
-        (cosmicWindows.activePanchak ? 1 : 0) +
-        (cosmicWindows.activeAmavasya ? 1 : 0) +
-        (cosmicWindows.activeRetrogrades?.length || 0) +
-        (cosmicWindows.activeIngress ? 1 : 0) +
-        (cosmicWindows.activeAspect ? 1 : 0);
-
-      let niftyScore = 0; // positive = bullish, negative = bearish
-      let goldScore = 0;
-      let summaryParts = [];
-
-      if (cosmicWindows.activeMoonAlignment) {
-        summaryParts.push(`Lunar alignment active: Moon Cycle aspect is at ${cosmicWindows.activeMoonAlignment.degree}.`);
-        niftyScore += 1;
-        goldScore += 1;
-      }
-      if (cosmicWindows.activeMercAlignment) {
-        summaryParts.push(`Mercury cycle active: alignment at ${cosmicWindows.activeMercAlignment.degree}. This is a key technical turn window.`);
-        niftyScore -= 1;
-      }
-      if (cosmicWindows.activePanchak) {
-        summaryParts.push(`Panchak Zone is active (${cosmicWindows.activePanchak.name}), signaling heightened trend-exhaustion and reversal risk.`);
-        niftyScore -= 2;
-        goldScore += 1;
-      }
-      if (cosmicWindows.activeAmavasya) {
-        summaryParts.push("Amavasya (New Moon) Reversal Window is active today, injecting cyclical volatility and short-term capital resets.");
-        niftyScore -= 1;
-        goldScore += 2;
-      }
-      if (cosmicWindows.activeRetrogrades && cosmicWindows.activeRetrogrades.length > 0) {
-        const names = cosmicWindows.activeRetrogrades.map((r: any) => r.planet).join(", ");
-        summaryParts.push(`Planetary retrogrades active: ${names}. This slows down direct economic momentum and creates market noise.`);
-        niftyScore -= 1;
-        goldScore += 1;
-      }
-      if (cosmicWindows.activeIngress) {
-        summaryParts.push(`Planetary Ingress active: ${cosmicWindows.activeIngress.planet} enters ${cosmicWindows.activeIngress.sign}, influencing major sectoral capital flows.`);
-        niftyScore += 1;
-      }
-      if (cosmicWindows.activeAspect) {
-        summaryParts.push(`A dynamic aspect is active: ${cosmicWindows.activeAspect.planet1} ${cosmicWindows.activeAspect.aspectType} ${cosmicWindows.activeAspect.planet2}.`);
-        goldScore += 1;
-      }
-
-      if (summaryParts.length === 0) {
-        summaryParts.push("No major celestial triggers are active today. The cosmic grid is in a neutral state, supporting steady consolidation.");
-      }
-
-      // 1. TODAY'S COSMIC WINDOWS INTERPRETATION (short text)
-      const todayInterpretation = summaryParts.length > 0 
-        ? `Today's market dynamics are shaped by ${summaryParts.length} active celestial alignment(s). ` +
-          (cosmicWindows.activePanchak || cosmicWindows.activeAmavasya 
-            ? "Reversal pressures are currently elevated due to active Panchak/Amavasya structures, necessitating conservative position sizing." 
-            : "The current grid is moderately supportive of established intraday trends, guided by minor lunar/mercury alignments.")
-        : "The cosmic grid is completely quiet today, leading to neutral consolidations and low-volatility sideways range play.";
-
-      // 2. UPCOMING INGRESSES INTERPRETATION (short text)
-      let upcomingIngressInterpretation = "No major upcoming planetary sign entries detected in the immediate forecast window.";
-      if (cosmicWindows.upcomingIngresses && cosmicWindows.upcomingIngresses.length > 0) {
-        const ingressesText = cosmicWindows.upcomingIngresses.map((ing: any) => 
-          `**${ing.planet}** entering **${ing.sign}** on *${ing.date}* (${ing.marketImpact || "Sector rotation"})`
-        ).join(", ");
-        upcomingIngressInterpretation = `The near-term pipeline contains major sector-shifting ingresses: ${ingressesText}. Expect capital re-allocation across thematic indices as these transit dates approach.`;
-      }
-
-      // 3. UPCOMING TRANSITS INTERPRETATION (short text)
-      let upcomingTransitInterpretation = "No major upcoming transit aspects identified in the near-term ephemeris.";
-      if (cosmicWindows.upcomingAspects && cosmicWindows.upcomingAspects.length > 0) {
-        const transitsText = cosmicWindows.upcomingAspects.map((asp: any) => 
-          `**${asp.planet1}** ${asp.aspectType || "aspecting"} **${asp.planet2}** on *${asp.date}* (${asp.interpretation || "Trend shift"})`
-        ).join(", ");
-        upcomingTransitInterpretation = `Watch key incoming planetary alignments for exact intraday cycle turns: ${transitsText}. These geometric aspects represent high-probability support/resistance breakout levels.`;
-      }
-
-      // Derive final biases based on scores
-      const niftyBias = niftyScore > 0 ? "BULLISH" : niftyScore < -1 ? "BEARISH" : niftyScore === 0 ? "NEUTRAL" : "VOLATILE";
-      const goldBias = goldScore > 1 ? "BULLISH" : goldScore < 0 ? "BEARISH" : goldScore === 0 ? "NEUTRAL" : "VOLATILE";
-
-      const reply = `### 🌌 Today's Cosmic Windows Interpretation
-${todayInterpretation}
-
-### ☄️ Upcoming Ingresses Interpretation
-${upcomingIngressInterpretation}
-
-### ☉ Upcoming Transits & Aspects Interpretation
-${upcomingTransitInterpretation}
-
----
-
-### 📊 Astro-Financial Market Bias
-
-#### 🇮🇳 Nifty 50: **${niftyBias}**
-Outlook: **${niftyBias}**. ${
-        niftyBias === "BULLISH" ? "Positive planetary ingress dates and supportive moon cycle coordinates favor short-term upward continuation." :
-        niftyBias === "BEARISH" ? "Active Panchak/Amavasya structures suggest extreme trend-exhaustion. Keep tight stop-losses on long positions as reversal risks are highly elevated." :
-        niftyBias === "VOLATILE" ? "The convergence of competing lunar and retrograde forces suggests dynamic, two-sided intraday volatility." :
-        "Quiet solar alignments suggest quiet consolidation and standard range-bound action."
-      }
-
-#### 🟡 Gold (XAU/USD): **${goldBias}**
-Outlook: **${goldBias}**. ${
-        goldBias === "BULLISH" ? "As the metal of the Sun, Gold is highly favored today. Increased safe-haven seeking during volatile retrogrades/Panchak cycles supports steady accumulation." :
-        goldBias === "BEARISH" ? "Lack of positive solar-venus aspects could lead to short-term profit-taking and technical consolidations." :
-        "Gold prices are expected to remain tightly bound within existing geometric support levels, waiting for the next solar cycle ingress."
-      }
-
-*Disclaimer: Astro-analytical forecasts are for educational cycle tracking purposes. Always cross-verify celestial projections with local volume profile and order block indicators.*`;
-
-      return {
-        reply,
-        niftyBias,
-        goldBias,
-        isFallback: true
-      };
-    };
-
     try {
       setIsAstroAiLoading(true);
       setAstroAiError(null);
       setShowAstroAiPanel(true);
       
-      let data;
-      try {
-        const response = await fetch("/api/cosmic-windows/analyze", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ cosmicWindows: aggregatedCosmicWindows }),
-        });
+      const response = await fetch("/api/cosmic-windows/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ cosmicWindows: aggregatedCosmicWindows }),
+      });
 
-        if (response.ok) {
-          data = await response.json();
-        } else {
-          console.warn(`[Cosmic Windows Astro AI] Server-side API returned status ${response.status}. Falling back to client-side analysis...`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = "Celestial uplink unavailable.";
+        try {
+          const parsed = JSON.parse(errorText);
+          errorMessage = parsed.error || errorMessage;
+        } catch {
+          if (errorText) errorMessage = errorText;
         }
-      } catch (fetchErr) {
-        console.warn("[Cosmic Windows Astro AI] Backend proxy failed (Static platform detected). Falling back to client-side analysis:", fetchErr);
+        throw new Error(errorMessage);
       }
 
-      // Use local client-side analyzer report if backend did not respond
-      if (!data) {
-        data = buildLocalReport();
-      }
+      const data = await response.json();
 
       setAstroAiResult({
         reply: data.reply,
         niftyBias: data.niftyBias,
         goldBias: data.goldBias,
-        isFallback: data.isFallback,
+        isFallback: false,
       });
     } catch (err: any) {
       console.error("[Cosmic Windows Astro AI Client Error]:", err);

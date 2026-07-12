@@ -293,7 +293,11 @@ const AuthPage = ({ onAuthSuccess, initialMode = 'login' }: { onAuthSuccess: () 
       onAuthSuccess();
     } catch (err: any) {
       console.error("Google Auth error:", err);
-      if (err.code === 'auth/network-request-failed') {
+      if (err.code === 'auth/unauthorized-domain') {
+        setError(`Unauthorized Domain: Google Sign-In is blocked because '${window.location.hostname}' is not authorized. Please open the Firebase Console, navigate to 'Authentication' > 'Settings' > 'Authorized Domains', and add '${window.location.hostname}' to the list.`);
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError("Operation Not Allowed: Google Sign-In is not enabled. Please open the Firebase Console, go to 'Authentication' > 'Sign-in method', and enable the Google provider.");
+      } else if (err.code === 'auth/network-request-failed') {
         setError(`Network error: This usually happens if the domain '${window.location.hostname}' is not added to 'Authorized Domains' in the Firebase Console. Please check settings.`);
       } else if (err.code === 'auth/popup-closed-by-user') {
         setError("Sign-in popup closed before completion. Please try again.");
